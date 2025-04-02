@@ -5,6 +5,8 @@
 #include <AP_Math/AP_Math.h>
 #include <AP_HAL/AP_HAL.h>
 
+#include <stdio.h>
+
 #define LSM9DS1M_OFFSET_X_REG_L_M   0x05
 #define LSM9DS1M_OFFSET_X_REG_H_M   0x06
 #define LSM9DS1M_OFFSET_Y_REG_L_M   0x07
@@ -73,6 +75,8 @@ AP_Compass_Backend *AP_Compass_LSM9DS1::probe(AP_HAL::OwnPtr<AP_HAL::Device> dev
 
 bool AP_Compass_LSM9DS1::init()
 {
+
+    printf("starting Compass_LSM9DS1: %u\n", AP_HAL::micros());
     AP_HAL::Semaphore *bus_sem = _dev->get_semaphore();
 
     if (!bus_sem) {
