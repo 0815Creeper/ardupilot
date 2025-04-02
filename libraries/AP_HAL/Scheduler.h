@@ -107,6 +107,7 @@ public:
         PRIORITY_SPI,
         PRIORITY_I2C,
         PRIORITY_CAN,
+        PRIORITY_UDP_HIL,
         PRIORITY_TIMER,
         PRIORITY_RCOUT,
         PRIORITY_LED,

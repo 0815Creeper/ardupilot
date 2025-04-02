@@ -21,6 +21,7 @@ namespace AP_HAL {
     class AnalogSource;
     class AnalogIn;
     class Storage;
+    //class UDP_HIL;
     class DigitalSource;
     class PWMSource;
     class GPIO;

@@ -23,6 +23,48 @@
 #include <AP_Math/crc.h>
 #include <AP_BoardConfig/AP_BoardConfig.h>
 
+#define MS_5611_UDP_HIL
+//#define MS5611_TimeOperation
+//#define MS5611_SocketMode
+//#define MS5611_SocketModePrint
+//30, 12.3, 3.8
+//sm: 30, 12.3, 3.7
+//sma: 30, 12.3, 3.7
+
+#ifdef MS_5611_UDP_HIL
+#include "AP_HAL_Linux/UDP_HIL.h"
+#endif
+#ifdef MS5611_TimeOperation
+#include <time.h>
+struct timespec MS5611_TimeOperation_ts;
+struct timespec MS5611_TimeOperation_tsp;
+int64_t MS5611_TimeOperation_difference;
+#define MS5611_TimeOperation_START() clock_gettime(CLOCK_MONOTONIC, &MS5611_TimeOperation_ts)
+#define MS5611_TimeOperation_STOP() clock_gettime(CLOCK_MONOTONIC, &MS5611_TimeOperation_tsp);MS5611_TimeOperation_difference = (int64_t)(MS5611_TimeOperation_tsp.tv_sec - MS5611_TimeOperation_ts.tv_sec) * (int64_t)1000000000UL + (int64_t)(MS5611_TimeOperation_tsp.tv_nsec - MS5611_TimeOperation_ts.tv_nsec);printf("Duration of timed operation: %lli\n", MS5611_TimeOperation_difference)
+#else
+#define MS5611_TimeOperation_START() ;
+#define MS5611_TimeOperation_STOP() ;
+#endif
+#if defined(MS5611_SocketMode) || defined(MS5611_SocketModePrint)
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#define MS5611_PORT 13017
+#define MS5611_RESPONSE_PORT (MS5611_PORT + 1000) // Immer auf 14017 antworten
+#define MS5611_RCV_SIZE (1+4*2)
+#define MS5611_BUFFER_SIZE (MS5611_RCV_SIZE + 4)
+static int MS5611_udp_socket = -1;
+static uint8_t MS5611_last_seq_num = 0;
+struct sockaddr_in client_addr;  
+socklen_t addr_len = sizeof(client_addr);  
+bool client_ip_set = false;  
+struct in_addr client_ip;  
+#endif
+
 extern const AP_HAL::HAL &hal;
 
 static const uint8_t CMD_MS56XX_RESET = 0x1E;
@@ -171,6 +213,31 @@ bool AP_Baro_MS56XX::_init()
     _dev->set_retries(3);
     
     _dev->get_semaphore()->give();
+
+#if defined(MS5611_SocketMode) || defined(MS5611_SocketModePrint)
+    struct sockaddr_in server_addr;
+    // UDP-Socket erstellen
+    MS5611_udp_socket = socket(AF_INET, SOCK_DGRAM, 0);
+    if (MS5611_udp_socket < 0) {
+        perror("Socket konnte nicht erstellt werden");
+        exit(EXIT_FAILURE);
+    }
+    // Nicht-blockierenden Modus aktivieren
+    int flags = fcntl(MS5611_udp_socket, F_GETFL, 0);
+    fcntl(MS5611_udp_socket, F_SETFL, flags | O_NONBLOCK);
+    // Serveradresse konfigurieren
+    memset(&server_addr, 0, sizeof(server_addr));
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_addr.s_addr = INADDR_ANY;
+    server_addr.sin_port = htons(MS5611_PORT);
+    // Socket an Port binden
+    if (bind(MS5611_udp_socket, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
+        perror("Bind fehlgeschlagen");
+        close(MS5611_udp_socket);
+        exit(EXIT_FAILURE);
+    }
+    printf("BaroMS5611: UDP-Socket initialisiert (Port %d, non-blocking), micros: %u\n", MS5611_PORT, AP_HAL::micros());
+#endif
 
     /* Request 100Hz update */
     _dev->register_periodic_callback(10 * AP_USEC_PER_MSEC,
@@ -373,6 +440,7 @@ void AP_Baro_MS56XX::update()
 // Calculate Temperature and compensated Pressure in real units (Celsius degrees*100, mbar*100).
 void AP_Baro_MS56XX::_calculate_5611()
 {
+    MS5611_TimeOperation_START();
     float dT;
     float TEMP;
     float OFF;
@@ -407,7 +475,137 @@ void AP_Baro_MS56XX::_calculate_5611()
 
     float pressure = (_D1*SENS/2097152 - OFF)/32768;
     float temperature = TEMP * 0.01f;
+    /*
+    struct timespec ts;
+    ts.tv_sec = 0;
+    ts.tv_nsec = 1000000;
+    printf("sleeping: %i\n",nanosleep(&ts, &ts));
+    */
+#if defined(MS5611_SocketMode) || defined(MS5611_SocketModePrint)
+    float pressure_orig = pressure;
+    float temperature_orig = temperature;
+    uint32_t send_micros = AP_HAL::micros();
+
+    struct sockaddr_in response_addr;
+    uint8_t buffer[MS5611_BUFFER_SIZE];
+
+    // Versuche, Daten zu empfangen (non-blocking)
+    ssize_t recv_len;
+    
+    if (!client_ip_set) {
+        recv_len = recvfrom(MS5611_udp_socket, buffer, MS5611_RCV_SIZE, 0,  
+                                    (struct sockaddr *)&client_addr, &addr_len);
+        if (recv_len == MS5611_RCV_SIZE) {
+            client_ip = client_addr.sin_addr; // Client-IP speichern  
+            client_ip_set = true;
+        }
+    } else {
+        // Falls die Client-IP bekannt ist, einfach recv nutzen
+        recv_len = recv(MS5611_udp_socket, buffer, MS5611_RCV_SIZE, 0);
+    }
+
+    if (recv_len == MS5611_RCV_SIZE) {
+        uint8_t seq_num = buffer[0];  // 8-Bit-Sequenznummer
+    
+        while (!((MS5611_last_seq_num == 255 && seq_num == 1) || seq_num == MS5611_last_seq_num + 1)) {
+            printf("FEHLER SEQ NUM FOLGE\n");
+            printf("FEHLER SEQ NUM FOLGE: lseq:%i seq:%i \n", MS5611_last_seq_num, seq_num);
+            while (1);
+        }
+
+        // Floats aus den empfangenen Bytes rekonstruieren
+        float value1, value2;
+        uint32_t temp;
+        temp =
+            ((uint32_t)buffer[1] << 24) |
+            ((uint32_t)buffer[2] << 16) |
+            ((uint32_t)buffer[3] << 8)  |
+            ((uint32_t)buffer[4]);
+        memcpy(&value1, &temp, sizeof(temp));
+
+        temp =
+            ((uint32_t)buffer[5] << 24) |
+            ((uint32_t)buffer[6] << 16) |
+            ((uint32_t)buffer[7] << 8)  |
+            ((uint32_t)buffer[8]);
+        memcpy(&value2, &temp, sizeof(temp));
+
+        if (value1 == 0.0 && value2 == 0.0) {
+            pressure = pressure_orig;
+            temperature = temperature_orig;
+        } else {
+            pressure = value1;
+            temperature = value2;
+        }
+
+#if defined(MS5611_SocketModePrint)
+        printf("Empfangen -> Seq: %u, Wert1: %f, Wert2: %f\n",
+            seq_num, value1, value2);
+#endif
+
+        // Antwort-Puffer vorbereiten
+        memcpy(&temp, &pressure_orig, sizeof(temp));
+        buffer[1] = (temp >> 24) & 0xFF;
+        buffer[2] = (temp >> 16) & 0xFF;
+        buffer[3] = (temp >> 8) & 0xFF;
+        buffer[4] = temp & 0xFF;
+
+        memcpy(&temp, &temperature_orig, sizeof(temp));
+        buffer[5] = (temp >> 24) & 0xFF;
+        buffer[6] = (temp >> 16) & 0xFF;
+        buffer[7] = (temp >> 8) & 0xFF;
+        buffer[8] = temp & 0xFF;
+
+#if defined(MS5611_SocketModePrint)
+        printf("Senden -> Seq: %u, Wert1: %f, Wert2: %f\n",
+            seq_num, pressure_orig, temperature_orig);
+#endif
+
+        buffer[9] = (send_micros >> 24) & 0xFF;
+        buffer[10] = (send_micros >> 16) & 0xFF;
+        buffer[11] = (send_micros >> 8) & 0xFF;
+        buffer[12] = send_micros & 0xFF;
+
+        // Zieladresse für die Antwort setzen (muss außerhalb bekannt sein)
+        memset(&response_addr, 0, sizeof(response_addr));
+        response_addr.sin_family = AF_INET;
+        response_addr.sin_addr = client_ip;
+        response_addr.sin_port = htons(MS5611_RESPONSE_PORT);
+
+        ssize_t sent_len = sendto(MS5611_udp_socket, &buffer, MS5611_BUFFER_SIZE, 0,
+                                (struct sockaddr *)&response_addr, sizeof(response_addr));
+
+        if (sent_len < 0) {
+            perror("Fehler beim Senden der Antwort");
+        } 
+#if defined(MS5611_SocketModePrint)
+        else {
+            printf("Antwort gesendet: Seq=%u an %s:%d\n",
+                seq_num, inet_ntoa(response_addr.sin_addr), MS5611_RESPONSE_PORT);
+        }
+#endif
+
+    MS5611_last_seq_num = seq_num;
+    } else if (recv_len != -1) {
+        printf("FEHLER RCV_LEN: MS5611_RCV_SIZE:%i recv_len:%i \n", MS5611_RCV_SIZE, recv_len);
+        while (1);
+    }
+
+#endif
+#ifdef MS_5611_UDP_HIL
+    float pressure_orig = pressure;
+    float temperature_orig = temperature;
+    UDP_HIL::getInstance().getInBaro(&pressure, &temperature);
+    UDP_HIL::getInstance().setOutBaro(pressure_orig, temperature_orig);
+    if (pressure == 0.0 && temperature == 0.0) {
+        pressure = pressure_orig;
+        temperature = temperature_orig;
+    }
+#endif
     _copy_to_frontend(_instance, pressure, temperature);
+
+
+    MS5611_TimeOperation_STOP();
 }
 
 // Calculate Temperature and compensated Pressure in real units (Celsius degrees*100, mbar*100).

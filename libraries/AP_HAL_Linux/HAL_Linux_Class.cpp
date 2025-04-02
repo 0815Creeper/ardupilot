@@ -43,6 +43,7 @@
 #include "Scheduler.h"
 #include "Storage.h"
 #include "UARTDriver.h"
+//#include "UDP_HIL.h"
 #include "Util.h"
 #include "Util_RPI.h"
 #include "CANSocketIface.h"
@@ -121,6 +122,8 @@ static AnalogIn_Navio2 analogIn;
 static Empty::AnalogIn analogIn;
 #endif
 
+//static Linux::UDP_HIL udp_hil;
+//static UDP_HIL udp_hil;
 static Storage storageDriver;
 
 /*
@@ -278,6 +281,8 @@ HAL_Linux::HAL_Linux() :
         &wspi_mgr_instance,
         &analogIn,
         &storageDriver,
+        //&udp_hil,
+        //static_cast<Linux::UDP_HIL*>(udp_hil),
         &serial0Driver,
         &gpioDriver,
         &rcinDriver,

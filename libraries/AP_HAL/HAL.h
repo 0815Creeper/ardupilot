@@ -11,6 +11,7 @@ class AP_Param;
 #include "SPIDevice.h"
 #include "WSPIDevice.h"
 #include "Storage.h"
+//#include "UDP_HIL.h"
 #include "UARTDriver.h"
 #include "system.h"
 #include "OpticalFlow.h"
@@ -35,6 +36,7 @@ public:
         AP_HAL::WSPIDeviceManager* _wspi,
         AP_HAL::AnalogIn*   _analogin,
         AP_HAL::Storage*    _storage,
+//        AP_HAL::UDP_HIL*    _udp_hil,
         AP_HAL::UARTDriver* _console,
         AP_HAL::GPIO*       _gpio,
         AP_HAL::RCInput*    _rcin,
@@ -71,6 +73,7 @@ public:
         wspi(_wspi),
         analogin(_analogin),
         storage(_storage),
+//        udp_hil(_udp_hil),
         console(_console),
         gpio(_gpio),
         rcin(_rcin),
@@ -123,6 +126,7 @@ public:
     AP_HAL::WSPIDeviceManager* wspi;
     AP_HAL::AnalogIn*   analogin;
     AP_HAL::Storage*    storage;
+//    AP_HAL::UDP_HIL*    udp_hil;
     AP_HAL::UARTDriver* console;
     AP_HAL::GPIO*       gpio;
     AP_HAL::RCInput*    rcin;
