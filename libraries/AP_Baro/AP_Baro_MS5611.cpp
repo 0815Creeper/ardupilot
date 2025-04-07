@@ -23,7 +23,7 @@
 #include <AP_Math/crc.h>
 #include <AP_BoardConfig/AP_BoardConfig.h>
 
-#define MS_5611_UDP_HIL
+#define MS5611_UDP_HIL
 //#define MS5611_TimeOperation
 //#define MS5611_SocketMode
 //#define MS5611_SocketModePrint
@@ -31,7 +31,7 @@
 //sm: 30, 12.3, 3.7
 //sma: 30, 12.3, 3.7
 
-#ifdef MS_5611_UDP_HIL
+#ifdef MS5611_UDP_HIL
 #include "AP_HAL_Linux/UDP_HIL.h"
 #endif
 #ifdef MS5611_TimeOperation
@@ -592,7 +592,7 @@ void AP_Baro_MS56XX::_calculate_5611()
     }
 
 #endif
-#ifdef MS_5611_UDP_HIL
+#ifdef MS5611_UDP_HIL
     float pressure_orig = pressure;
     float temperature_orig = temperature;
     UDP_HIL::getInstance().getInBaro(&pressure, &temperature);

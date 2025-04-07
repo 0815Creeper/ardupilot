@@ -25,6 +25,13 @@
 
 #include <AP_InertialSensor/AP_InertialSensor_Invensense.h>
 
+#define AK8963_UDP_HIL
+
+#ifdef AK8963_UDP_HIL
+#include <stdio.h>
+#include "AP_HAL_Linux/UDP_HIL.h"
+#endif
+
 #define AK8963_I2C_ADDR                                 0x0c
 
 #define AK8963_WIA                                      0x00
@@ -169,7 +176,7 @@ bool AP_Compass_AK8963::init()
 
     set_rotation(_compass_instance, _rotation);
     bus_sem->give();
-
+    printf("MagAK8963 (MPU9250): initialisiert, micros: %u\n", AP_HAL::micros());
     _bus->register_periodic_callback(10000, FUNCTOR_BIND_MEMBER(&AP_Compass_AK8963::_update, void));
 
     return true;
@@ -226,7 +233,17 @@ void AP_Compass_AK8963::_update()
     _make_factory_sensitivity_adjustment(raw_field);
     _make_adc_sensitivity_adjustment(raw_field);
     raw_field *= AK8963_MILLIGAUSS_SCALE;
+#ifdef AK8963_UDP_HIL
+    UDP_HIL::getInstance().setOutMAGbuff(&raw_field);
+    Vector3f buffer;
+    UDP_HIL::getInstance().getInMAGbuff(&buffer);
+    if (!(is_zero(buffer.x) && is_zero(buffer.y) && is_zero(buffer.z))) {
+        memcpy(&raw_field, &buffer, sizeof(buffer));
+    } else if(UDP_HIL::getInstance().getInSeq() != 0) {
+        printf("one invalid mag_udp_hil_sample: %f, %f, %f\n", buffer[0], buffer[1], buffer[2]);
+    }
 
+#endif
     accumulate_sample(raw_field, _compass_instance, 10);
 }
 

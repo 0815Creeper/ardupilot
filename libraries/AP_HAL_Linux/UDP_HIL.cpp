@@ -1,5 +1,8 @@
-#include "UDP_HIL.h"
+#include <unistd.h>
 #include <AP_HAL/AP_HAL.h>
+#include <AP_Math/AP_Math.h>
+
+#include "UDP_HIL.h"
 
 UDP_HIL& UDP_HIL::getInstance() {
     static UDP_HIL instance;
@@ -11,7 +14,7 @@ UDP_HIL::UDP_HIL() {
 }
 
 void UDP_HIL::init_socket() {
-    printf("UDP_HIL_creation\n");
+    printf("UDP_HIL_creation, PID:%i\n", getpid());
     struct sockaddr_in server_addr;
     udp_hil_socket = socket(AF_INET, SOCK_DGRAM, 0);
     if (udp_hil_socket < 0) {
@@ -48,27 +51,34 @@ void UDP_HIL::init_socket() {
     }
 }
 
-void UDP_HIL::setInData(uint8_t* newData) {
+void UDP_HIL::setInData(struct DataStruct* newData) {
     std::lock_guard<std::mutex> lock(in_mutex_);
     memcpy((&in_data_), newData, sizeof(struct DataStruct));
-    getBaroFloatsFromDatastruct(&in_data_.Baro_pressure, &in_data_.Baro_temprature, newData);
-    //printf("cpy size: %i\n",sizeof(struct DataStruct));
-    //printf("seq_num_copied: %i\n", newData[132]);
-    //printf("seq_num_indata: %i\n", in_data_.seq_num);
-    //printf("in_data:\n");
-    //for(int i=0;i<236;i++){    printf("%i ", in_data_.IMU_buff[i-8]);    }
-    //printf("\nnewdata:\n");
-    //for(int i=0;i<236;i++){    printf("%i ", newData[i]);    }
-    //printf("end:\n");
+    //printf("%x %x %x %x; %x %x %x %x; %x\n", ((uint8_t*)newData)[0], ((uint8_t*)newData)[1], ((uint8_t*)newData)[2], ((uint8_t*)newData)[3], ((uint8_t*)newData)[4], ((uint8_t*)newData)[5], ((uint8_t*)newData)[6], ((uint8_t*)newData)[7], getSeq(*newData));
+    //rotateFloats(&in_data_);
+    //printf("%x %x %x %x; %x %x %x %x; %x\n", ((uint8_t*)newData)[0], ((uint8_t*)newData)[1], ((uint8_t*)newData)[2], ((uint8_t*)newData)[3], ((uint8_t*)newData)[4], ((uint8_t*)newData)[5], ((uint8_t*)newData)[6], ((uint8_t*)newData)[7], getSeq(*newData));
+    //printf("\n");
+    //printf("baro: %f, %f\n\n", in_data_.Baro_pressure, in_data_.Baro_temprature);
 }
-
-void UDP_HIL::getBaroFloatsFromDatastruct(float* p, float* t, uint8_t* newData){
+/*
+void UDP_HIL::rotateFloats(struct DataStruct* d){
     uint32_t tmp;
-    tmp = (uint32_t)(newData[0]<<24)|(newData[1]<<16)|(newData[2]<<8)|newData[3];
-    memcpy(p, &tmp, sizeof(float));
-    tmp = (uint32_t)(newData[4]<<24)|(newData[5]<<16)|(newData[6]<<8)|newData[7];
-    memcpy(t, &tmp, sizeof(float));
-}
+    memcpy(&tmp, &(d->Baro_pressure), sizeof(float));
+    tmp = (uint32_t)((tmp & (0xFF<<24))>>24)|((tmp & (0xFF<<16))>>8)|((tmp & (0xFF<<8))<<8)|((tmp & (0xFF))<<24);
+    memcpy(&(d->Baro_pressure), &tmp, sizeof(float));
+    memcpy(&tmp, &(d->Baro_temprature), sizeof(float));
+    tmp = (uint32_t)((tmp & (0xFF<<24))>>24)|((tmp & (0xFF<<16))>>8)|((tmp & (0xFF<<8))<<8)|((tmp & (0xFF))<<24);
+    memcpy(&(d->Baro_temprature), &tmp, sizeof(float));
+    memcpy(&tmp, &(d->MAG_xyz.x), sizeof(float));
+    tmp = (uint32_t)((tmp & (0xFF<<24))>>24)|((tmp & (0xFF<<16))>>8)|((tmp & (0xFF<<8))<<8)|((tmp & (0xFF))<<24);
+    memcpy(&(d->MAG_xyz.x), &tmp, sizeof(float));
+    memcpy(&tmp, &(d->MAG_xyz.y), sizeof(float));
+    tmp = (uint32_t)((tmp & (0xFF<<24))>>24)|((tmp & (0xFF<<16))>>8)|((tmp & (0xFF<<8))<<8)|((tmp & (0xFF))<<24);
+    memcpy(&(d->MAG_xyz.y), &tmp, sizeof(float));
+    memcpy(&tmp, &(d->MAG_xyz.z), sizeof(float));
+    tmp = (uint32_t)((tmp & (0xFF<<24))>>24)|((tmp & (0xFF<<16))>>8)|((tmp & (0xFF<<8))<<8)|((tmp & (0xFF))<<24);
+    memcpy(&(d->MAG_xyz.z), &tmp, sizeof(float));
+}*/
 
 DataStruct UDP_HIL::getOutData() {
     std::lock_guard<std::mutex> lock(out_mutex_);
@@ -77,6 +87,11 @@ DataStruct UDP_HIL::getOutData() {
 
 uint8_t UDP_HIL::getSeq(const DataStruct& data) {
     return data.seq_num;
+}
+
+uint8_t UDP_HIL::getInSeq(){
+    std::lock_guard<std::mutex> lock(in_mutex_);
+    return in_data_.seq_num;
 }
 
 void UDP_HIL::getInBaro(float* p, float* t) {
@@ -90,15 +105,11 @@ void UDP_HIL::getInIMUbuff(uint8_t* buff) {
     memcpy(buff, in_data_.IMU_buff, IMU_BUFF_LEN);
 }
 
-void UDP_HIL::getInMAGbuff(uint8_t* buff) {
+void UDP_HIL::getInMAGbuff(Vector3f* buff) {
     std::lock_guard<std::mutex> lock(in_mutex_);
-    memcpy(buff, in_data_.MAG_buff, MAG_BUFF_LEN);
+    memcpy(buff, &in_data_.MAG_xyz, sizeof(Vector3f));
 }
 
-void UDP_HIL::setOutSeq(uint8_t s) {
-    std::lock_guard<std::mutex> lock(out_mutex_);
-    out_data_.seq_num |= s;
-}
 
 void UDP_HIL::resetOutSeq() {
     std::lock_guard<std::mutex> lock(out_mutex_);
@@ -111,18 +122,18 @@ void UDP_HIL::setOutBaro(float p, float t) {
     out_data_.Baro_temprature = t;
 }
 
-void UDP_HIL::setOutIMUbuff(uint8_t* buff) {
+void UDP_HIL::setOutIMUbuff(uint8_t* buff, uint8_t n_samples) {
     std::lock_guard<std::mutex> lock(out_mutex_);
-    memcpy(out_data_.IMU_buff, buff, IMU_BUFF_LEN);
+    memcpy(out_data_.IMU_buff, buff, n_samples*IMU_BUFF_LEN/8);
 }
 
-void UDP_HIL::setOutMAGbuff(uint8_t* buff) {
+void UDP_HIL::setOutMAGbuff(Vector3f* buff) {
     std::lock_guard<std::mutex> lock(out_mutex_);
-    memcpy(out_data_.MAG_buff, buff, MAG_BUFF_LEN);
+    memcpy(&out_data_.MAG_xyz, buff, sizeof(out_data_.MAG_xyz));
 }
 
-#include <unistd.h>     //getpid()
-#include <pthread.h>    //pthread_self()
+//#include <unistd.h>     //getpid()
+//#include <pthread.h>    //pthread_self()
 
 void UDP_HIL::_timer_tick() {
     if(!socket_inited){
@@ -157,7 +168,8 @@ void UDP_HIL::_timer_tick() {
             printf("FEHLER SEQ NUM FOLGE\n");
             while(1);
         }
-        setInData((uint8_t*)&buffer);
+        //setInData((uint8_t*)&buffer);
+        setInData(&buffer);
         response_addr.sin_family = AF_INET;
         response_addr.sin_addr = client_addr.sin_addr;
         response_addr.sin_port = htons(UDP_HIL_RESPONSE_PORT);

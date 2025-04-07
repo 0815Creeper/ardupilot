@@ -30,10 +30,14 @@
 #include <GCS_MAVLink/GCS.h>
 
 
+#define MPU9250_UDP_HIL
 //#define MPU9250_TimeOperation
 //#define MPU9250_SocketMode
 //#define MPU9250_SocketModePrint
 //
+#ifdef MPU9250_UDP_HIL
+#include "AP_HAL_Linux/UDP_HIL.h"
+#endif
 #ifdef MPU9250_TimeOperation
 #include <time.h>
 struct timespec MPU9250_TimeOperation_ts;
@@ -733,11 +737,26 @@ bool AP_InertialSensor_Invensense::_accumulate_sensor_rate_sampling(uint8_t *sam
     const int32_t unscaled_clip_limit = _clip_limit / _accel_scale;
     bool clipped = false;
     bool ret = true;
-    
+#if defined(MPU9250_UDP_HIL)
+    uint8_t buffer[IMU_BUFF_LEN];
+    UDP_HIL::getInstance().getInIMUbuff(buffer);
+    UDP_HIL::getInstance().setOutIMUbuff(samples, n_samples);
+#endif
     for (uint8_t i = 0; i < n_samples; i++) {
 
-#if defined(MPU9250_SocketMode) || defined(MPU9250_SocketModePrint)
+#if defined(MPU9250_SocketMode) || defined(MPU9250_SocketModePrint) || defined(MPU9250_UDP_HIL)
+#if defined(MPU9250_UDP_HIL)
+        uint8_t buff_or = 0;
+        for(int j=0; j<MPU_SAMPLE_SIZE; j++) {
+            buff_or |= buffer[j+MPU_SAMPLE_SIZE * i];
+        }
+        const uint8_t *data = buff_or ? (buffer + MPU_SAMPLE_SIZE * i):(samples + MPU_SAMPLE_SIZE * i);
+        if (!buff_or && UDP_HIL::getInstance().getInSeq() != 0) {
+            printf("one invalid imu_udp_hil_sample at index %i \n", i);
+        }
+#else
         const uint8_t *data = buffer + 1 + MPU_SAMPLE_SIZE * i;
+#endif        
 #else
         const uint8_t *data = samples + MPU_SAMPLE_SIZE * i;
 #endif

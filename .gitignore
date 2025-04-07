@@ -136,7 +136,6 @@ cmake-build-*/
 /GCOV_*.log
 way.txt
 *.wbproj
-*.wbproj
 segv_*out
 /scripts/
 /repl/
@@ -166,3 +165,5 @@ ENV/
 env.bak/
 venv.bak/
 autotest_result_*_junit.xml
+/Tools/environment_install/install-prereqs-ubuntuDIY.sh
+/cache-ip-pi
