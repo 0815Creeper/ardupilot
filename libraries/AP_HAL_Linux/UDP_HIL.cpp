@@ -10,6 +10,9 @@ UDP_HIL& UDP_HIL::getInstance() {
 }
 
 UDP_HIL::UDP_HIL() {
+    out_data_.gps_len=0;
+    out_data_.gps_setup=0;
+    getValidGPSbuff =&UDP_HIL::getLclGPSbuff;
     init_socket();
 }
 
@@ -110,6 +113,14 @@ void UDP_HIL::getInMAGbuff(Vector3f* buff) {
     memcpy(buff, &in_data_.MAG_xyz, sizeof(Vector3f));
 }
 
+void UDP_HIL::getInGPSbuff(uint8_t* buff, uint8_t pos) {
+    std::lock_guard<std::mutex> lock(in_mutex_);
+    *buff = in_data_.GPS_buff[pos];
+}
+void UDP_HIL::getLclGPSbuff(uint8_t* buff, uint8_t pos) {
+    *buff = GPS_lcl_buff[pos];
+}
+
 
 void UDP_HIL::resetOutSeq() {
     std::lock_guard<std::mutex> lock(out_mutex_);
@@ -130,6 +141,44 @@ void UDP_HIL::setOutIMUbuff(uint8_t* buff, uint8_t n_samples) {
 void UDP_HIL::setOutMAGbuff(Vector3f* buff) {
     std::lock_guard<std::mutex> lock(out_mutex_);
     memcpy(&out_data_.MAG_xyz, buff, sizeof(out_data_.MAG_xyz));
+}
+
+void UDP_HIL::setOutGPSbuff(uint8_t val, uint8_t pos) {
+    GPS_lcl_buff[pos] = val;
+    GPS_lcl_buff_len = pos;
+}
+
+
+void UDP_HIL::setOutGPSsetup(uint8_t val) {
+    if(GPS_lcl_buff_setup == val)
+        return;
+    GPS_lcl_buff_setup = val;
+    printf("GPS is setup!!!! udp_hil\n");
+}
+
+void UDP_HIL::syncOutGPSbuff() {
+    std::lock_guard<std::mutex> lock(in_mutex_);
+    memcpy(in_data_.GPS_buff, GPS_lcl_buff, GPS_lcl_buff_len);
+    out_data_.gps_len = GPS_lcl_buff_len;
+    out_data_.gps_setup = GPS_lcl_buff_setup;
+}
+/*
+bool UDP_HIL::waiting_for_GPS_setup_done() {
+    return getValidGPSbuff != &UDP_HIL::getInGPSbuff;
+}
+void UDP_HIL::notify_GPS_setup_done() {
+    getValidGPSbuff = &UDP_HIL::getInGPSbuff;
+    printf("GPS setup done!!!");
+    GPS_lcl_buff_setup |= 1; 
+}
+
+*/
+void UDP_HIL::inDataSwitchOver() {
+    if (out_data_.gps_setup == 0)
+        return;
+    switchedOver = true;
+    printf("UDP_HIL_SWITCH_OVER!!!\n");
+    getValidGPSbuff = &UDP_HIL::getInGPSbuff;
 }
 
 //#include <unistd.h>     //getpid()
@@ -170,6 +219,8 @@ void UDP_HIL::_timer_tick() {
         }
         //setInData((uint8_t*)&buffer);
         setInData(&buffer);
+        if (!switchedOver)
+            inDataSwitchOver();
         response_addr.sin_family = AF_INET;
         response_addr.sin_addr = client_addr.sin_addr;
         response_addr.sin_port = htons(UDP_HIL_RESPONSE_PORT);

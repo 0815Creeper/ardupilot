@@ -29,6 +29,12 @@
 #include "RTCM3_Parser.h"
 #include <stdio.h>
 
+#define GPS_UDP_HIL
+
+#ifdef GPS_UDP_HIL
+#include "AP_HAL_Linux/UDP_HIL.h"
+#endif
+
 #if CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_LINUX_NAVIO || \
     CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_LINUX_BH
     #define UBLOX_SPEED_CHANGE  1
@@ -272,14 +278,18 @@ const AP_GPS_UBLOX::config_list AP_GPS_UBLOX::config_L5_ovrd_dis[] {
 void
 AP_GPS_UBLOX::_request_next_config(void)
 {
+
+    //printf("GPS ubx: next config: ");
     // don't request config if we shouldn't configure the GPS
     if (gps._auto_config == AP_GPS::GPS_AUTO_CONFIG_DISABLE) {
+        //printf("\n");
         return;
     }
 
     // Ensure there is enough space for the largest possible outgoing message
     if (port->txspace() < (uint16_t)(sizeof(struct ubx_header)+sizeof(struct ubx_cfg_nav_rate)+2)) {
         // not enough space - do it next time
+        //printf("not enought space!\n");
         return;
     }
 
@@ -291,8 +301,9 @@ AP_GPS_UBLOX::_request_next_config(void)
         _unconfigured_messages &= ~CONFIG_RATE_SOL;
     }
 
-    Debug("Unconfigured messages: 0x%x Current message: %u\n", (unsigned)_unconfigured_messages, (unsigned)_next_message);
-
+    //printf("Unconfigured messages: 0x%x Current message: %u\n", (unsigned)_unconfigured_messages, (unsigned)_next_message);
+    if (_unconfigured_messages == 0)
+        UDP_HIL::getInstance().setOutGPSsetup(1);
     // check AP_GPS_UBLOX.h for the enum that controls the order.
     // This switch statement isn't maintained against the enum in order to reduce code churn
     switch (_next_message++) {
@@ -487,10 +498,12 @@ AP_GPS_UBLOX::_request_next_config(void)
         _next_message = STEP_PVT;
         break;
     }
+    //printf("\n");
 }
 
 void
 AP_GPS_UBLOX::_verify_rate(uint8_t msg_class, uint8_t msg_id, uint8_t rate) {
+    printf("GPS UBX: verifying rate \n");
     uint8_t desired_rate;
     uint32_t config_msg_id;
     switch(msg_class) {
@@ -636,13 +649,25 @@ AP_GPS_UBLOX::read(void)
     }
 
     const uint16_t numc = MIN(port->available(), 8192U);
+#ifdef GPS_UDP_HIL
+    while(numc > UDP_HIL_GPS_BUFF_LEN)
+        printf("GPS err, avail>UDP_HIL_GPS_BUFF_LEN: %i>%i\n", numc, UDP_HIL_GPS_BUFF_LEN);
+#endif
     for (uint16_t i = 0; i < numc; i++) {        // Process bytes received
-
         // read the next byte
         uint8_t data;
         if (!port->read(data)) {
+            while(1)
+                printf("GPS BREAK!!!");
             break;
         }
+#ifdef GPS_UDP_HIL
+        uint8_t comp_data=data;
+        UDP_HIL::getInstance().setOutGPSbuff(data, i);
+        (UDP_HIL::getInstance().*UDP_HIL::getInstance().getValidGPSbuff)(&data, i);
+        if(data!=comp_data)
+            printf("GPS-DATA-MISMATCH\n");
+#endif
 #if AP_GPS_DEBUG_LOGGING_ENABLED
         log_data(&data, 1);
 #endif
@@ -716,7 +741,7 @@ AP_GPS_UBLOX::read(void)
 
             _payload_length += (uint16_t)(data<<8);
             if (_payload_length > sizeof(_buffer)) {
-                Debug("large payload %u", (unsigned)_payload_length);
+                printf("large payload %u\n", (unsigned)_payload_length);
                 // assume any payload bigger then what we know about is noise
                 _payload_length = 0;
                 _step = 0;
@@ -745,7 +770,7 @@ AP_GPS_UBLOX::read(void)
         case 7:
             _step++;
             if (_ck_a != data) {
-                Debug("bad cka %x should be %x", data, _ck_a);
+                printf("bad cka %x should be %x\n", data, _ck_a);
                 _step = 0;
 				goto reset;
             }
@@ -769,6 +794,9 @@ AP_GPS_UBLOX::read(void)
             break;
         }
     }
+#ifdef GPS_UDP_HIL
+    UDP_HIL::getInstance().syncOutGPSbuff();
+#endif
     return parsed;
 }
 
