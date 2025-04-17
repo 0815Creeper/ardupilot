@@ -739,7 +739,7 @@ bool AP_InertialSensor_Invensense::_accumulate_sensor_rate_sampling(uint8_t *sam
     bool ret = true;
 #if defined(MPU9250_UDP_HIL)
     uint8_t buffer[IMU_BUFF_LEN];
-    UDP_HIL::getInstance().getInIMUbuff(buffer);
+    (UDP_HIL::getInstance().*UDP_HIL::getInstance().getValidIMUbuff)(buffer);
     UDP_HIL::getInstance().setOutIMUbuff(samples, n_samples);
 #endif
     for (uint8_t i = 0; i < n_samples; i++) {

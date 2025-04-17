@@ -595,7 +595,7 @@ void AP_Baro_MS56XX::_calculate_5611()
 #ifdef MS5611_UDP_HIL
     float pressure_orig = pressure;
     float temperature_orig = temperature;
-    UDP_HIL::getInstance().getInBaro(&pressure, &temperature);
+    (UDP_HIL::getInstance().*UDP_HIL::getInstance().getValidBaro)(&pressure, &temperature);
     UDP_HIL::getInstance().setOutBaro(pressure_orig, temperature_orig);
     if (pressure == 0.0 && temperature == 0.0) {
         pressure = pressure_orig;

@@ -236,7 +236,7 @@ void AP_Compass_AK8963::_update()
 #ifdef AK8963_UDP_HIL
     UDP_HIL::getInstance().setOutMAGbuff(&raw_field);
     Vector3f buffer;
-    UDP_HIL::getInstance().getInMAGbuff(&buffer);
+    (UDP_HIL::getInstance().*UDP_HIL::getInstance().getValidMAGbuff)(&buffer);
     if (!(is_zero(buffer.x) && is_zero(buffer.y) && is_zero(buffer.z))) {
         memcpy(&raw_field, &buffer, sizeof(buffer));
     } else if(UDP_HIL::getInstance().getInSeq() != 0) {

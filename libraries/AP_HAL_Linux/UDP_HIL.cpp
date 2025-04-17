@@ -10,9 +10,10 @@ UDP_HIL& UDP_HIL::getInstance() {
 }
 
 UDP_HIL::UDP_HIL() {
-    out_data_.gps_len=0;
-    out_data_.gps_setup=0;
-    getValidGPSbuff =&UDP_HIL::getLclGPSbuff;
+    getValidIMUbuff =&UDP_HIL::getOutIMUbuff;
+    getValidMAGbuff =&UDP_HIL::getOutMAGbuff;
+    getValidGPSstate =&UDP_HIL::getOutGPSstate;
+    getValidBaro =&UDP_HIL::getOutBaro;
     init_socket();
 }
 
@@ -57,31 +58,7 @@ void UDP_HIL::init_socket() {
 void UDP_HIL::setInData(struct DataStruct* newData) {
     std::lock_guard<std::mutex> lock(in_mutex_);
     memcpy((&in_data_), newData, sizeof(struct DataStruct));
-    //printf("%x %x %x %x; %x %x %x %x; %x\n", ((uint8_t*)newData)[0], ((uint8_t*)newData)[1], ((uint8_t*)newData)[2], ((uint8_t*)newData)[3], ((uint8_t*)newData)[4], ((uint8_t*)newData)[5], ((uint8_t*)newData)[6], ((uint8_t*)newData)[7], getSeq(*newData));
-    //rotateFloats(&in_data_);
-    //printf("%x %x %x %x; %x %x %x %x; %x\n", ((uint8_t*)newData)[0], ((uint8_t*)newData)[1], ((uint8_t*)newData)[2], ((uint8_t*)newData)[3], ((uint8_t*)newData)[4], ((uint8_t*)newData)[5], ((uint8_t*)newData)[6], ((uint8_t*)newData)[7], getSeq(*newData));
-    //printf("\n");
-    //printf("baro: %f, %f\n\n", in_data_.Baro_pressure, in_data_.Baro_temprature);
 }
-/*
-void UDP_HIL::rotateFloats(struct DataStruct* d){
-    uint32_t tmp;
-    memcpy(&tmp, &(d->Baro_pressure), sizeof(float));
-    tmp = (uint32_t)((tmp & (0xFF<<24))>>24)|((tmp & (0xFF<<16))>>8)|((tmp & (0xFF<<8))<<8)|((tmp & (0xFF))<<24);
-    memcpy(&(d->Baro_pressure), &tmp, sizeof(float));
-    memcpy(&tmp, &(d->Baro_temprature), sizeof(float));
-    tmp = (uint32_t)((tmp & (0xFF<<24))>>24)|((tmp & (0xFF<<16))>>8)|((tmp & (0xFF<<8))<<8)|((tmp & (0xFF))<<24);
-    memcpy(&(d->Baro_temprature), &tmp, sizeof(float));
-    memcpy(&tmp, &(d->MAG_xyz.x), sizeof(float));
-    tmp = (uint32_t)((tmp & (0xFF<<24))>>24)|((tmp & (0xFF<<16))>>8)|((tmp & (0xFF<<8))<<8)|((tmp & (0xFF))<<24);
-    memcpy(&(d->MAG_xyz.x), &tmp, sizeof(float));
-    memcpy(&tmp, &(d->MAG_xyz.y), sizeof(float));
-    tmp = (uint32_t)((tmp & (0xFF<<24))>>24)|((tmp & (0xFF<<16))>>8)|((tmp & (0xFF<<8))<<8)|((tmp & (0xFF))<<24);
-    memcpy(&(d->MAG_xyz.y), &tmp, sizeof(float));
-    memcpy(&tmp, &(d->MAG_xyz.z), sizeof(float));
-    tmp = (uint32_t)((tmp & (0xFF<<24))>>24)|((tmp & (0xFF<<16))>>8)|((tmp & (0xFF<<8))<<8)|((tmp & (0xFF))<<24);
-    memcpy(&(d->MAG_xyz.z), &tmp, sizeof(float));
-}*/
 
 DataStruct UDP_HIL::getOutData() {
     std::lock_guard<std::mutex> lock(out_mutex_);
@@ -102,29 +79,37 @@ void UDP_HIL::getInBaro(float* p, float* t) {
     *p = in_data_.Baro_pressure;
     *t = in_data_.Baro_temprature;
 }
+void UDP_HIL::getOutBaro(float* p, float* t) {
+    std::lock_guard<std::mutex> lock(out_mutex_);
+    *p = out_data_.Baro_pressure;
+    *t = out_data_.Baro_temprature;
+}
 
 void UDP_HIL::getInIMUbuff(uint8_t* buff) {
     std::lock_guard<std::mutex> lock(in_mutex_);
     memcpy(buff, in_data_.IMU_buff, IMU_BUFF_LEN);
+}
+void UDP_HIL::getOutIMUbuff(uint8_t* buff) {
+    std::lock_guard<std::mutex> lock(out_mutex_);
+    memcpy(buff, out_data_.IMU_buff, IMU_BUFF_LEN);
 }
 
 void UDP_HIL::getInMAGbuff(Vector3f* buff) {
     std::lock_guard<std::mutex> lock(in_mutex_);
     memcpy(buff, &in_data_.MAG_xyz, sizeof(Vector3f));
 }
-
-void UDP_HIL::getInGPSbuff(uint8_t* buff, uint8_t pos) {
-    std::lock_guard<std::mutex> lock(in_mutex_);
-    *buff = in_data_.GPS_buff[pos];
-}
-void UDP_HIL::getLclGPSbuff(uint8_t* buff, uint8_t pos) {
-    *buff = GPS_lcl_buff[pos];
-}
-
-
-void UDP_HIL::resetOutSeq() {
+void UDP_HIL::getOutMAGbuff(Vector3f* buff) {
     std::lock_guard<std::mutex> lock(out_mutex_);
-    out_data_.seq_num = 0;
+    memcpy(buff, &out_data_.MAG_xyz, sizeof(Vector3f));
+}
+
+GPSStruct UDP_HIL::getOutGPSstate() {
+    std::lock_guard<std::mutex> lock(out_mutex_);
+    return out_data_.GPSstate;
+}
+GPSStruct UDP_HIL::getInGPSstate() {
+    std::lock_guard<std::mutex> lock(in_mutex_);
+    return in_data_.GPSstate;
 }
 
 void UDP_HIL::setOutBaro(float p, float t) {
@@ -143,42 +128,36 @@ void UDP_HIL::setOutMAGbuff(Vector3f* buff) {
     memcpy(&out_data_.MAG_xyz, buff, sizeof(out_data_.MAG_xyz));
 }
 
-void UDP_HIL::setOutGPSbuff(uint8_t val, uint8_t pos) {
-    GPS_lcl_buff[pos] = val;
-    GPS_lcl_buff_len = pos;
+void UDP_HIL::setOutGPSstate(GPSStruct* buff) {
+    std::lock_guard<std::mutex> lock(out_mutex_);
+    memcpy(&out_data_.GPSstate, buff, sizeof(struct GPSStruct));
 }
 
-
-void UDP_HIL::setOutGPSsetup(uint8_t val) {
-    if(GPS_lcl_buff_setup == val)
-        return;
-    GPS_lcl_buff_setup = val;
-    printf("GPS is setup!!!! udp_hil\n");
+void UDP_HIL::setOutMotor(uint8_t ch, uint16_t pwm) {
+    std::lock_guard<std::mutex> lock(out_mutex_);
+    switch(ch) {
+        case 0:
+            out_data_.motorPWM0 = pwm;
+            break;
+        case 1:
+            out_data_.motorPWM1 = pwm;
+            break;
+        case 2:
+            out_data_.motorPWM2 = pwm;
+            break;
+        case 3:
+            out_data_.motorPWM3 = pwm;
+            break;
+    }
 }
 
-void UDP_HIL::syncOutGPSbuff() {
-    std::lock_guard<std::mutex> lock(in_mutex_);
-    memcpy(in_data_.GPS_buff, GPS_lcl_buff, GPS_lcl_buff_len);
-    out_data_.gps_len = GPS_lcl_buff_len;
-    out_data_.gps_setup = GPS_lcl_buff_setup;
-}
-/*
-bool UDP_HIL::waiting_for_GPS_setup_done() {
-    return getValidGPSbuff != &UDP_HIL::getInGPSbuff;
-}
-void UDP_HIL::notify_GPS_setup_done() {
-    getValidGPSbuff = &UDP_HIL::getInGPSbuff;
-    printf("GPS setup done!!!");
-    GPS_lcl_buff_setup |= 1; 
-}
-
-*/
 void UDP_HIL::inDataSwitchOver() {
-    if (out_data_.gps_setup == 0)
-        return;
     switchedOver = true;
     printf("UDP_HIL_SWITCH_OVER!!!\n");
-    getValidGPSbuff = &UDP_HIL::getInGPSbuff;
+    getValidGPSstate = &UDP_HIL::getInGPSstate;
+    getValidBaro = &UDP_HIL::getInBaro;
+    getValidIMUbuff = &UDP_HIL::getInIMUbuff;
+    getValidMAGbuff = &UDP_HIL::getInMAGbuff;
 }
 
 //#include <unistd.h>     //getpid()
@@ -189,6 +168,7 @@ void UDP_HIL::_timer_tick() {
         printf("udp_hil_tick_but_socket_not_rdy\n");
         init_socket();
     }
+    //printf("%i\n", sizeof(GPSStruct));
     //printf("PID: %d, Thread-ID: %lu, udp_hil_socket: %d\n", getpid(), pthread_self(), udp_hil_socket);
     struct sockaddr_in client_addr, response_addr;
     socklen_t addr_len = sizeof(client_addr);
@@ -201,6 +181,9 @@ void UDP_HIL::_timer_tick() {
     ssize_t recv_len = recvfrom(udp_hil_socket, &buffer, sizeof(buffer), 0,
                                 (struct sockaddr *)&client_addr, &addr_len);
     if (recv_len == -1){
+        if (switchedOver) {
+            //printf("ONE UDP_HIL timer_tick_skipped at %i\n", AP_HAL::micros());
+        }
         //TODO not good but for testing
         if (errno == EAGAIN || errno == EWOULDBLOCK) { //|| AP_HAL::micros()<10000000UL
             // Keine Daten empfangen, einfach weiter machen
@@ -211,7 +194,8 @@ void UDP_HIL::_timer_tick() {
             return;
         }
     } else if (recv_len == sizeof(buffer)) {
-        if(!((getSeq(in_data_) == 255 && getSeq(buffer) == 1) || getSeq(buffer) == getSeq(in_data_) + 1)){
+        printf("got seq %i\n", getSeq(buffer));
+        if(!((getSeq(in_data_) == 255 && getSeq(buffer) == 1) || getSeq(buffer) == getSeq(in_data_) + 1 || getSeq(buffer) == 0)){
             printf("FEHLER SEQ NUM FOLGE\n");
             printf("FEHLER SEQ NUM FOLGE: lseq:%i seq:%i \n", getSeq(in_data_), getSeq(buffer));
             printf("FEHLER SEQ NUM FOLGE\n");
@@ -219,25 +203,26 @@ void UDP_HIL::_timer_tick() {
         }
         //setInData((uint8_t*)&buffer);
         setInData(&buffer);
-        if (!switchedOver)
+        if (!switchedOver && getSeq(in_data_) > 0)
             inDataSwitchOver();
         response_addr.sin_family = AF_INET;
         response_addr.sin_addr = client_addr.sin_addr;
         response_addr.sin_port = htons(UDP_HIL_RESPONSE_PORT);
         buffer = getOutData();
+        buffer.seq_num = getInSeq() + 1;
         ssize_t sent_len = sendto(udp_hil_socket, &buffer, sizeof(buffer), 0,
                                 (struct sockaddr *)&response_addr, addr_len);
         if (sent_len < 0) {
             perror("Fehler beim Senden der Antwort");
-        } 
-            
-        resetOutSeq();
+        }
     } else {
         printf("FEHLER RCV_LEN\n");
         printf("FEHLER RCV_LEN: sizeof(buffer):%i recv_len:%i \n", sizeof(buffer), recv_len);
         printf("FEHLER RCV_LEN\n");
         while(1);
     }
+    while(recvfrom(udp_hil_socket, &buffer, sizeof(buffer), 0, (struct sockaddr *)&client_addr, &addr_len) != -1)
+        printf("UDP_HIL skipping packet\n");
 
     //if (AP_HAL::micros()<8000000)
     //    printf("UDP_HIL_tick: %u\n", AP_HAL::micros());

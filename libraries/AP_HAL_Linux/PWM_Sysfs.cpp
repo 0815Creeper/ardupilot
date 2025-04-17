@@ -16,6 +16,7 @@
  */
 #include "PWM_Sysfs.h"
 
+
 #include <errno.h>
 #include <fcntl.h>
 #include <inttypes.h>
@@ -25,6 +26,7 @@
 
 #include <AP_HAL/AP_HAL.h>
 #include <AP_Math/AP_Math.h>
+#include <AP_HAL_Linux/UDP_HIL.h>
 
 extern const AP_HAL::HAL& hal;
 
@@ -95,7 +97,6 @@ bool PWM_Sysfs_Base::is_enabled()
 void PWM_Sysfs_Base::set_period(uint32_t nsec_period)
 {
     set_duty_cycle(0);
-
     if (Util::from(hal.util)->write_file(_period_path, "%u", nsec_period) < 0) {
         hal.console->printf("LinuxPWM_Sysfs: %s Unable to set period\n",
                             _period_path);
@@ -126,6 +127,8 @@ uint32_t PWM_Sysfs_Base::get_freq()
 
 bool PWM_Sysfs_Base::set_duty_cycle(uint32_t nsec_duty_cycle)
 {
+    //printf("pwm %i: %i\n", _channel, nsec_duty_cycle);
+    UDP_HIL::getInstance().setOutMotor(_channel, (uint16_t)(nsec_duty_cycle/1000));
     /* Don't log fails since this could spam the console */
     if (dprintf(_duty_cycle_fd, "%u", nsec_duty_cycle) < 0) {
         return false;

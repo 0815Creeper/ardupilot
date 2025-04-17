@@ -300,10 +300,6 @@ AP_GPS_UBLOX::_request_next_config(void)
          */
         _unconfigured_messages &= ~CONFIG_RATE_SOL;
     }
-
-    //printf("Unconfigured messages: 0x%x Current message: %u\n", (unsigned)_unconfigured_messages, (unsigned)_next_message);
-    if (_unconfigured_messages == 0)
-        UDP_HIL::getInstance().setOutGPSsetup(1);
     // check AP_GPS_UBLOX.h for the enum that controls the order.
     // This switch statement isn't maintained against the enum in order to reduce code churn
     switch (_next_message++) {
@@ -503,7 +499,6 @@ AP_GPS_UBLOX::_request_next_config(void)
 
 void
 AP_GPS_UBLOX::_verify_rate(uint8_t msg_class, uint8_t msg_id, uint8_t rate) {
-    printf("GPS UBX: verifying rate \n");
     uint8_t desired_rate;
     uint32_t config_msg_id;
     switch(msg_class) {
@@ -649,10 +644,6 @@ AP_GPS_UBLOX::read(void)
     }
 
     const uint16_t numc = MIN(port->available(), 8192U);
-#ifdef GPS_UDP_HIL
-    while(numc > UDP_HIL_GPS_BUFF_LEN)
-        printf("GPS err, avail>UDP_HIL_GPS_BUFF_LEN: %i>%i\n", numc, UDP_HIL_GPS_BUFF_LEN);
-#endif
     for (uint16_t i = 0; i < numc; i++) {        // Process bytes received
         // read the next byte
         uint8_t data;
@@ -661,13 +652,6 @@ AP_GPS_UBLOX::read(void)
                 printf("GPS BREAK!!!");
             break;
         }
-#ifdef GPS_UDP_HIL
-        uint8_t comp_data=data;
-        UDP_HIL::getInstance().setOutGPSbuff(data, i);
-        (UDP_HIL::getInstance().*UDP_HIL::getInstance().getValidGPSbuff)(&data, i);
-        if(data!=comp_data)
-            printf("GPS-DATA-MISMATCH\n");
-#endif
 #if AP_GPS_DEBUG_LOGGING_ENABLED
         log_data(&data, 1);
 #endif
@@ -794,9 +778,6 @@ AP_GPS_UBLOX::read(void)
             break;
         }
     }
-#ifdef GPS_UDP_HIL
-    UDP_HIL::getInstance().syncOutGPSbuff();
-#endif
     return parsed;
 }
 
@@ -1019,7 +1000,6 @@ bool
 AP_GPS_UBLOX::_parse_gps(void)
 {
     if (_class == CLASS_ACK) {
-        Debug("ACK %u", (unsigned)_msg_id);
 
         if(_msg_id == MSG_ACK_ACK) {
             switch(_buffer.ack.clsID) {
@@ -1028,6 +1008,7 @@ AP_GPS_UBLOX::_parse_gps(void)
                 case MSG_CFG_CFG:
                     _cfg_saved = true;
                     _cfg_needs_save = false;
+                    printf("GPS CONFIG SAVED\n");
                     break;
                 case MSG_CFG_GNSS:
                     _unconfigured_messages &= ~CONFIG_GNSS;
@@ -1441,6 +1422,7 @@ AP_GPS_UBLOX::_parse_gps(void)
         return false;
     }
 
+  
     switch (_msg_id) {
     case MSG_POSLLH:
         Debug("MSG_POSLLH next_fix=%u", next_fix);
@@ -1448,6 +1430,32 @@ AP_GPS_UBLOX::_parse_gps(void)
             _unconfigured_messages |= CONFIG_RATE_POSLLH;
             break;
         }
+    #ifdef GPS_UDP_HIL
+        //due to c++ standard: It is not allowed to jump (e.g. via goto, switch-case, etc.) into a scope that has a variable with a non-trivial initializer.
+        {
+            GPSStruct hilFrameIn = (UDP_HIL::getInstance().*UDP_HIL::getInstance().getValidGPSstate)();
+            GPSStruct hilFrameOut = UDP_HIL::getInstance().getOutGPSstate();
+            
+            hilFrameOut.time_week_ms = _buffer.posllh.itow;
+            hilFrameOut.lon = _buffer.posllh.longitude;
+            hilFrameOut.lat = _buffer.posllh.latitude;
+            hilFrameOut.alt = _buffer.posllh.altitude_msl / 10;
+            hilFrameOut.horizontal_accuracy = _buffer.posllh.horizontal_accuracy*1.0e-3f;
+            hilFrameOut.vertical_accuracy = _buffer.posllh.vertical_accuracy*1.0e-3f;
+            
+            UDP_HIL::getInstance().setOutGPSstate(&hilFrameOut);
+    
+            _buffer.posllh.itow = hilFrameIn.time_week_ms;
+            _buffer.posllh.longitude = hilFrameIn.lon;
+            _buffer.posllh.latitude = hilFrameIn.lat;
+            _buffer.posllh.altitude_msl = hilFrameIn.alt * 10;
+            _buffer.posllh.altitude_ellipsoid = hilFrameIn.alt * 10;
+            _buffer.posllh.horizontal_accuracy = hilFrameIn.horizontal_accuracy * 1.0e3f;
+            _buffer.posllh.vertical_accuracy = hilFrameIn.vertical_accuracy * 1.0e3f;
+            // currently not set
+            // state.undulation = (_buffer.posllh.altitude_msl - _buffer.posllh.altitude_ellipsoid) * 0.001;
+        }
+    #endif 
         _check_new_itow(_buffer.posllh.itow);
         _last_pos_time        = _buffer.posllh.itow;
         state.location.lng    = _buffer.posllh.longitude;
@@ -1474,11 +1482,52 @@ AP_GPS_UBLOX::_parse_gps(void)
         Debug("MSG_STATUS fix_status=%u fix_type=%u",
               _buffer.status.fix_status,
               _buffer.status.fix_type);
-        _check_new_itow(_buffer.status.itow);
         if (havePvtMsg) {
             _unconfigured_messages |= CONFIG_RATE_STATUS;
             break;
         }
+
+    #ifdef GPS_UDP_HIL
+        //due to c++ standard: It is not allowed to jump (e.g. via goto, switch-case, etc.) into a scope that has a variable with a non-trivial initializer.
+        {
+            GPSStruct hilFrameIn = (UDP_HIL::getInstance().*UDP_HIL::getInstance().getValidGPSstate)();
+            GPSStruct hilFrameOut = UDP_HIL::getInstance().getOutGPSstate();
+            
+            if (_buffer.status.fix_status & NAV_STATUS_FIX_VALID) {
+                if( (_buffer.status.fix_type == AP_GPS_UBLOX::FIX_3D) &&
+                    (_buffer.status.fix_status & AP_GPS_UBLOX::NAV_STATUS_DGPS_USED)) {
+                    hilFrameOut.status = AP_GPS::GPS_OK_FIX_3D_DGPS;
+                }else if( _buffer.status.fix_type == AP_GPS_UBLOX::FIX_3D) {
+                    hilFrameOut.status = AP_GPS::GPS_OK_FIX_3D;
+                }else if (_buffer.status.fix_type == AP_GPS_UBLOX::FIX_2D) {
+                    hilFrameOut.status = AP_GPS::GPS_OK_FIX_2D;
+                }else{
+                    hilFrameOut.status = AP_GPS::NO_FIX;
+                }
+            }else{
+                hilFrameOut.status = AP_GPS::NO_FIX;
+            }
+            hilFrameOut.time_week_ms = _buffer.status.itow;
+            
+            UDP_HIL::getInstance().setOutGPSstate(&hilFrameOut);
+    
+            if (hilFrameIn.status == 4) {
+                _buffer.status.fix_type = AP_GPS_UBLOX::FIX_3D;
+                _buffer.status.fix_status = NAV_STATUS_FIX_VALID | AP_GPS_UBLOX::NAV_STATUS_DGPS_USED;
+            } else if (hilFrameIn.status == 3) {
+                _buffer.status.fix_type = AP_GPS_UBLOX::FIX_3D;
+                _buffer.status.fix_status = NAV_STATUS_FIX_VALID;
+            } else if (hilFrameIn.status == 2) {
+                _buffer.status.fix_type = AP_GPS_UBLOX::FIX_2D;
+                _buffer.status.fix_status = NAV_STATUS_FIX_VALID;
+            }else{
+                _buffer.status.fix_status &= 0xFF & (~NAV_STATUS_FIX_VALID) & (~NAV_STATUS_DGPS_USED);
+            }
+            _buffer.status.itow = hilFrameIn.time_week_ms;
+        }
+    #endif 
+        _check_new_itow(_buffer.status.itow);
+
         if (_buffer.status.fix_status & NAV_STATUS_FIX_VALID) {
             if( (_buffer.status.fix_type == AP_GPS_UBLOX::FIX_3D) &&
                 (_buffer.status.fix_status & AP_GPS_UBLOX::NAV_STATUS_DGPS_USED)) {
@@ -1503,6 +1552,23 @@ AP_GPS_UBLOX::_parse_gps(void)
     case MSG_DOP:
         Debug("MSG_DOP");
         noReceivedHdop = false;
+        #ifdef GPS_UDP_HIL
+        //due to c++ standard: It is not allowed to jump (e.g. via goto, switch-case, etc.) into a scope that has a variable with a non-trivial initializer.
+        {
+            GPSStruct hilFrameIn = (UDP_HIL::getInstance().*UDP_HIL::getInstance().getValidGPSstate)();
+            GPSStruct hilFrameOut = UDP_HIL::getInstance().getOutGPSstate();
+            
+            hilFrameOut.time_week_ms = _buffer.dop.itow;
+            hilFrameOut.hDOP = _buffer.dop.hDOP;
+            hilFrameOut.vDOP = _buffer.dop.vDOP;
+            
+            UDP_HIL::getInstance().setOutGPSstate(&hilFrameOut);
+    
+            _buffer.dop.itow = hilFrameIn.time_week_ms;
+            _buffer.dop.hDOP = hilFrameIn.hDOP;
+            _buffer.dop.vDOP = hilFrameIn.vDOP;
+        }
+    #endif 
         _check_new_itow(_buffer.dop.itow);
         state.hdop        = _buffer.dop.hDOP;
         state.vdop        = _buffer.dop.vDOP;
@@ -1515,11 +1581,60 @@ AP_GPS_UBLOX::_parse_gps(void)
         Debug("MSG_SOL fix_status=%u fix_type=%u",
               _buffer.solution.fix_status,
               _buffer.solution.fix_type);
-        _check_new_itow(_buffer.solution.itow);
         if (havePvtMsg) {
             state.time_week = _buffer.solution.week;
             break;
         }
+    #ifdef GPS_UDP_HIL
+        //due to c++ standard: It is not allowed to jump (e.g. via goto, switch-case, etc.) into a scope that has a variable with a non-trivial initializer.
+        {
+            GPSStruct hilFrameIn = (UDP_HIL::getInstance().*UDP_HIL::getInstance().getValidGPSstate)();
+            GPSStruct hilFrameOut = UDP_HIL::getInstance().getOutGPSstate();
+            
+            if(noReceivedHdop) {
+                hilFrameOut.hDOP = _buffer.solution.position_DOP;
+            }
+            hilFrameOut.num_sats = _buffer.solution.satellites;
+            hilFrameOut.time_week_ms = _buffer.solution.itow;
+            hilFrameOut.time_week = _buffer.solution.week;
+            
+            if (_buffer.solution.fix_status & NAV_STATUS_FIX_VALID) {
+                if( (_buffer.solution.fix_type == AP_GPS_UBLOX::FIX_3D) &&
+                    (_buffer.solution.fix_status & AP_GPS_UBLOX::NAV_STATUS_DGPS_USED)) {
+                    hilFrameOut.status = AP_GPS::GPS_OK_FIX_3D_DGPS;
+                }else if( _buffer.solution.fix_type == AP_GPS_UBLOX::FIX_3D) {
+                    hilFrameOut.status = AP_GPS::GPS_OK_FIX_3D;
+                }else if (_buffer.solution.fix_type == AP_GPS_UBLOX::FIX_2D) {
+                    hilFrameOut.status = AP_GPS::GPS_OK_FIX_2D;
+                }else{
+                    hilFrameOut.status = AP_GPS::NO_FIX;
+                }
+            }else{
+                hilFrameOut.status = AP_GPS::NO_FIX;
+            }
+            
+            UDP_HIL::getInstance().setOutGPSstate(&hilFrameOut);
+    
+            if (hilFrameIn.status == 4) {
+                _buffer.solution.fix_type = AP_GPS_UBLOX::FIX_3D;
+                _buffer.solution.fix_status = NAV_STATUS_FIX_VALID | AP_GPS_UBLOX::NAV_STATUS_DGPS_USED;
+            } else if (hilFrameIn.status == 3) {
+                _buffer.solution.fix_type = AP_GPS_UBLOX::FIX_3D;
+                _buffer.solution.fix_status = NAV_STATUS_FIX_VALID;
+            } else if (hilFrameIn.status == 2) {
+                _buffer.solution.fix_type = AP_GPS_UBLOX::FIX_2D;
+                _buffer.solution.fix_status = NAV_STATUS_FIX_VALID;
+            }else{
+                _buffer.solution.fix_status &= 0xFF & (~NAV_STATUS_FIX_VALID) & (~NAV_STATUS_DGPS_USED);
+            }
+    
+            _buffer.solution.position_DOP = hilFrameIn.hDOP;
+            _buffer.solution.satellites = hilFrameIn.num_sats;
+            _buffer.solution.itow = hilFrameIn.time_week_ms;
+            _buffer.solution.week = hilFrameIn.time_week;
+        }
+    #endif 
+        _check_new_itow(_buffer.solution.itow);
         if (_buffer.solution.fix_status & NAV_STATUS_FIX_VALID) {
             if( (_buffer.solution.fix_type == AP_GPS_UBLOX::FIX_3D) &&
                 (_buffer.solution.fix_status & AP_GPS_UBLOX::NAV_STATUS_DGPS_USED)) {
@@ -1604,7 +1719,84 @@ AP_GPS_UBLOX::_parse_gps(void)
 
     case MSG_PVT:
         Debug("MSG_PVT");
+        #ifdef GPS_UDP_HIL
+        //due to c++ standard: It is not allowed to jump (e.g. via goto, switch-case, etc.) into a scope that has a variable with a non-trivial initializer.
+        {
+            GPSStruct hilFrameIn = (UDP_HIL::getInstance().*UDP_HIL::getInstance().getValidGPSstate)();
+            GPSStruct hilFrameOut = UDP_HIL::getInstance().getOutGPSstate();
+            
+            hilFrameOut.time_week_ms = _buffer.pvt.itow;
+            hilFrameOut.lon = _buffer.pvt.lon;
+            hilFrameOut.lat = _buffer.pvt.lat;
+            hilFrameOut.alt = _buffer.pvt.h_msl / 10;
+            hilFrameOut.horizontal_accuracy = _buffer.pvt.h_acc*1.0e-3f;
+            hilFrameOut.vertical_accuracy = _buffer.pvt.v_acc*1.0e-3f;
+            hilFrameOut.num_sats = _buffer.pvt.num_sv;
+            hilFrameOut.gspd = _buffer.pvt.gspeed*0.001f;          
+            hilFrameOut.gcourse = wrap_360(_buffer.pvt.head_mot * 1.0e-5f);       // Heading 2D deg * 100000
+            hilFrameOut.velocity.x = _buffer.pvt.velN * 0.001f;
+            hilFrameOut.velocity.y = _buffer.pvt.velE * 0.001f;
+            hilFrameOut.velocity.z = _buffer.pvt.velD * 0.001f;
+            hilFrameOut.speed_accuracy = _buffer.pvt.s_acc*0.001f;
+            if(noReceivedHdop) {
+                hilFrameOut.hDOP = _buffer.pvt.p_dop;
+                hilFrameOut.vDOP = _buffer.pvt.p_dop;
+            }
 
+            if (_buffer.pvt.fix_type == 2) {
+                hilFrameOut.status = AP_GPS::GPS_OK_FIX_2D;
+            }else if(_buffer.pvt.fix_type == 3) {
+                hilFrameOut.status = AP_GPS::GPS_OK_FIX_3D;
+                if (_buffer.pvt.flags & 0b00000010)  // diffsoln
+                    hilFrameOut.status = AP_GPS::GPS_OK_FIX_3D_DGPS;
+                if (_buffer.pvt.flags & 0b01000000)  // carrsoln - float
+                    hilFrameOut.status = AP_GPS::GPS_OK_FIX_3D_RTK_FLOAT;
+                if (_buffer.pvt.flags & 0b10000000)  // carrsoln - fixed
+                    hilFrameOut.status = AP_GPS::GPS_OK_FIX_3D_RTK_FIXED;
+            }else if (_buffer.pvt.fix_type == 4) {
+                hilFrameOut.status = AP_GPS::GPS_OK_FIX_3D;
+            }else{
+                hilFrameOut.status = AP_GPS::NO_FIX;
+            }
+            UDP_HIL::getInstance().setOutGPSstate(&hilFrameOut);
+    
+            _buffer.pvt.itow = hilFrameIn.time_week_ms;
+            _buffer.pvt.lon = hilFrameIn.lon;
+            _buffer.pvt.lat = hilFrameIn.lat;
+            _buffer.pvt.h_msl = hilFrameIn.alt * 10;
+            _buffer.pvt.h_ellipsoid = hilFrameIn.alt * 10;
+            // currently not set
+            // state.undulation = (_buffer.pvt.altitude_msl - _buffer.pvt.altitude_ellipsoid) * 0.001;
+            _buffer.pvt.h_acc = hilFrameIn.horizontal_accuracy*1.0e3f;
+            _buffer.pvt.v_acc = hilFrameIn.vertical_accuracy*1.0e3f;
+            _buffer.pvt.num_sv = hilFrameIn.num_sats;
+            _buffer.pvt.gspeed = hilFrameIn.gspd *1000.0f;          
+            _buffer.pvt.head_mot = hilFrameIn.gcourse * 1.0e5f;       // Heading 2D deg * 100000
+            _buffer.pvt.velN = hilFrameIn.velocity.x * 1000.0f;
+            _buffer.pvt.velE = hilFrameIn.velocity.y * 1000.0f;
+            _buffer.pvt.velD = hilFrameIn.velocity.z * 1000.0f;
+            _buffer.pvt.s_acc = hilFrameIn.speed_accuracy * 1000.0f;
+            _buffer.pvt.p_dop = hilFrameIn.hDOP;
+
+            _buffer.pvt.flags &= 0b00111101;
+            if (hilFrameIn.status == AP_GPS::GPS_OK_FIX_2D) {
+                _buffer.pvt.fix_type = 2;
+            } else if(hilFrameIn.status == 3) {
+                _buffer.pvt.fix_type = 3;
+            } else if (hilFrameIn.status == 4) {
+                _buffer.pvt.fix_type = 3;
+                _buffer.pvt.flags |= 0b00000010;// diffsoln
+            } else if (hilFrameIn.status == 5) {
+                _buffer.pvt.fix_type = 3;
+                _buffer.pvt.flags |= 0b01000000;// carrsoln - float
+            } else if (hilFrameIn.status == 6) {
+                _buffer.pvt.fix_type = 3;
+                _buffer.pvt.flags |= 0b10000000;// carrsoln - fixed
+            }else{
+                _buffer.pvt.fix_type = 0;
+            }
+        }
+    #endif 
         havePvtMsg = true;
         // position
         _check_new_itow(_buffer.pvt.itow);
@@ -1694,6 +1886,21 @@ AP_GPS_UBLOX::_parse_gps(void)
         break;
     case MSG_TIMEGPS:
         Debug("MSG_TIMEGPS");
+        #ifdef GPS_UDP_HIL
+        //due to c++ standard: It is not allowed to jump (e.g. via goto, switch-case, etc.) into a scope that has a variable with a non-trivial initializer.
+        {
+            GPSStruct hilFrameIn = (UDP_HIL::getInstance().*UDP_HIL::getInstance().getValidGPSstate)();
+            GPSStruct hilFrameOut = UDP_HIL::getInstance().getOutGPSstate();
+            
+            hilFrameOut.time_week = _buffer.timegps.week;
+            hilFrameOut.time_week_ms = _buffer.timegps.itow;
+            
+            UDP_HIL::getInstance().setOutGPSstate(&hilFrameOut);
+    
+            _buffer.timegps.week = hilFrameIn.time_week;
+            _buffer.timegps.itow = hilFrameIn.time_week_ms;
+        }
+    #endif 
         _check_new_itow(_buffer.timegps.itow);
         if (_buffer.timegps.valid & UBX_TIMEGPS_VALID_WEEK_MASK) {
             state.time_week = _buffer.timegps.week;
@@ -1701,6 +1908,31 @@ AP_GPS_UBLOX::_parse_gps(void)
         break;
     case MSG_VELNED:
         Debug("MSG_VELNED");
+        #ifdef GPS_UDP_HIL
+        //due to c++ standard: It is not allowed to jump (e.g. via goto, switch-case, etc.) into a scope that has a variable with a non-trivial initializer.
+        {
+            GPSStruct hilFrameIn = (UDP_HIL::getInstance().*UDP_HIL::getInstance().getValidGPSstate)();
+            GPSStruct hilFrameOut = UDP_HIL::getInstance().getOutGPSstate();
+            
+            hilFrameOut.time_week_ms = _buffer.velned.itow;
+            hilFrameOut.gspd = _buffer.velned.speed_2d*0.01f;          // m/s
+            hilFrameOut.gcourse = wrap_360(_buffer.velned.heading_2d * 1.0e-5f);       // Heading 2D deg * 100000
+            hilFrameOut.velocity.x = _buffer.velned.ned_north * 0.01f;
+            hilFrameOut.velocity.y = _buffer.velned.ned_east * 0.01f;
+            hilFrameOut.velocity.z = _buffer.velned.ned_down * 0.01f;
+            hilFrameOut.speed_accuracy = _buffer.velned.speed_accuracy*0.01f;
+
+            UDP_HIL::getInstance().setOutGPSstate(&hilFrameOut);
+    
+            _buffer.velned.itow = hilFrameIn.time_week_ms;
+            _buffer.velned.speed_2d = hilFrameIn.gspd *100.0f;          // m/s
+            _buffer.velned.heading_2d = hilFrameIn.gcourse * 1.0e5f;       // Heading 2D deg * 100000
+            _buffer.velned.ned_north = hilFrameIn.velocity.x * 100.0f;
+            _buffer.velned.ned_east = hilFrameIn.velocity.y * 100.0f;
+            _buffer.velned.ned_down = hilFrameIn.velocity.z * 100.0f;
+            _buffer.velned.speed_accuracy = hilFrameIn.speed_accuracy * 100.0f;
+        }
+    #endif 
         if (havePvtMsg) {
             _unconfigured_messages |= CONFIG_RATE_VELNED;
             break;
@@ -1724,6 +1956,19 @@ AP_GPS_UBLOX::_parse_gps(void)
     case MSG_NAV_SVINFO:
         {
         Debug("MSG_NAV_SVINFO\n");
+        #ifdef GPS_UDP_HIL
+        //due to c++ standard: It is not allowed to jump (e.g. via goto, switch-case, etc.) into a scope that has a variable with a non-trivial initializer.
+        {
+            GPSStruct hilFrameIn = (UDP_HIL::getInstance().*UDP_HIL::getInstance().getValidGPSstate)();
+            GPSStruct hilFrameOut = UDP_HIL::getInstance().getOutGPSstate();
+            
+            hilFrameOut.time_week_ms = _buffer.svinfo_header.itow;
+            
+            UDP_HIL::getInstance().setOutGPSstate(&hilFrameOut);
+    
+            _buffer.svinfo_header.itow = hilFrameIn.time_week_ms;
+        }
+    #endif 
         static const uint8_t HardwareGenerationMask = 0x07;
         _check_new_itow(_buffer.svinfo_header.itow);
         _hardware_generation = _buffer.svinfo_header.globalFlags & HardwareGenerationMask;
@@ -1737,7 +1982,7 @@ AP_GPS_UBLOX::_parse_gps(void)
             case UBLOX_M8:
 #if UBLOX_SPEED_CHANGE
                 port->begin(4000000U);
-                Debug("Changed speed to 4Mhz for SPI-driven UBlox\n");
+                printf("Changed speed to 4Mhz for SPI-driven UBlox\n");
 #endif
                 break;
             default:
@@ -1750,9 +1995,9 @@ AP_GPS_UBLOX::_parse_gps(void)
         break;
         }
     default:
-        Debug("Unexpected NAV message 0x%02x", (unsigned)_msg_id);
+        printf("Unexpected NAV message 0x%02x\n", (unsigned)_msg_id);
         if (++_disable_counter == 0) {
-            Debug("Disabling NAV message 0x%02x", (unsigned)_msg_id);
+            printf("Disabling NAV message 0x%02x\n", (unsigned)_msg_id);
             _configure_message_rate(CLASS_NAV, _msg_id, 0);
         }
         return false;
