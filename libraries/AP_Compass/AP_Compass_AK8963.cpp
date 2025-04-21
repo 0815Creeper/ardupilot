@@ -176,7 +176,9 @@ bool AP_Compass_AK8963::init()
 
     set_rotation(_compass_instance, _rotation);
     bus_sem->give();
+    #ifdef AK8963_UDP_HIL
     printf("MagAK8963 (MPU9250): initialisiert, micros: %u\n", AP_HAL::micros());
+    #endif
     _bus->register_periodic_callback(10000, FUNCTOR_BIND_MEMBER(&AP_Compass_AK8963::_update, void));
 
     return true;

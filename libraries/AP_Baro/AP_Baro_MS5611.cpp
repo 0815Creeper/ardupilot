@@ -530,7 +530,7 @@ void AP_Baro_MS56XX::_calculate_5611()
             ((uint32_t)buffer[8]);
         memcpy(&value2, &temp, sizeof(temp));
 
-        if (value1 == 0.0 && value2 == 0.0) {
+        if (value1 >= 0.0 && value2 >= 0.0 && value1 <= 0.0 && value2 <= 0.0) {
             pressure = pressure_orig;
             temperature = temperature_orig;
         } else {
@@ -597,7 +597,7 @@ void AP_Baro_MS56XX::_calculate_5611()
     float temperature_orig = temperature;
     (UDP_HIL::getInstance().*UDP_HIL::getInstance().getValidBaro)(&pressure, &temperature);
     UDP_HIL::getInstance().setOutBaro(pressure_orig, temperature_orig);
-    if (pressure == 0.0 && temperature == 0.0) {
+    if (pressure >= 0.0 && temperature >= 0.0 && pressure <= 0.0 && temperature <= 0.0) {
         pressure = pressure_orig;
         temperature = temperature_orig;
     }

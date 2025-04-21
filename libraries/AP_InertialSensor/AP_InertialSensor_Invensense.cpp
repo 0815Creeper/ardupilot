@@ -866,6 +866,12 @@ bool AP_InertialSensor_Invensense::_accumulate_sensor_rate_sampling(uint8_t *sam
 
 void AP_InertialSensor_Invensense::_read_fifo()
 {
+    //clock_gettime(CLOCK_MONOTONIC, &MPU9250_TimeOperation_tsp);
+    //MPU9250_TimeOperation_difference = (int64_t)(MPU9250_TimeOperation_tsp.tv_sec - MPU9250_TimeOperation_ts.tv_sec) * (int64_t)1000000000UL + (int64_t)(MPU9250_TimeOperation_tsp.tv_nsec - MPU9250_TimeOperation_ts.tv_nsec);
+    //printf("Duration of timed operation: %lli\n", MPU9250_TimeOperation_difference);
+    //memcpy(&MPU9250_TimeOperation_ts, &MPU9250_TimeOperation_tsp, sizeof(timespec));
+    
+    //MPU9250_TimeOperation_START();
     uint8_t n_samples;
     uint16_t bytes_read;
     uint8_t *rx = _fifo_buffer;
@@ -979,6 +985,7 @@ check_registers:
         _inc_accel_error_count(_accel_instance);
     }
     _dev->set_speed(AP_HAL::Device::SPEED_HIGH);
+    //MPU9250_TimeOperation_STOP();
 }
 
 /*

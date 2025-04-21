@@ -4,6 +4,11 @@
 
 #include "UDP_HIL.h"
 
+#include <time.h>
+struct timespec UDP_HIL_TimeOperation_ts;
+struct timespec UDP_HIL_TimeOperation_tsp;
+int64_t UDP_HIL_TimeOperation_difference;
+
 UDP_HIL& UDP_HIL::getInstance() {
     static UDP_HIL instance;
     return instance;
@@ -159,11 +164,21 @@ void UDP_HIL::inDataSwitchOver() {
     getValidIMUbuff = &UDP_HIL::getInIMUbuff;
     getValidMAGbuff = &UDP_HIL::getInMAGbuff;
 }
-
+/*
+void UDP_HIL::inDataSwitchBack() {
+    printf("UDP_HIL_SWITCH_BACK!!!\n");
+    getValidIMUbuff =&UDP_HIL::getOutIMUbuff;
+    getValidMAGbuff =&UDP_HIL::getOutMAGbuff;
+    getValidGPSstate =&UDP_HIL::getOutGPSstate;
+    getValidBaro =&UDP_HIL::getOutBaro;
+}
+*/
 //#include <unistd.h>     //getpid()
 //#include <pthread.h>    //pthread_self()
 
 void UDP_HIL::_timer_tick() {
+    
+    //clock_gettime(CLOCK_MONOTONIC, &UDP_HIL_TimeOperation_ts);
     if(!socket_inited){
         printf("udp_hil_tick_but_socket_not_rdy\n");
         init_socket();
@@ -181,8 +196,9 @@ void UDP_HIL::_timer_tick() {
     ssize_t recv_len = recvfrom(udp_hil_socket, &buffer, sizeof(buffer), 0,
                                 (struct sockaddr *)&client_addr, &addr_len);
     if (recv_len == -1){
-        if (switchedOver) {
-            //printf("ONE UDP_HIL timer_tick_skipped at %i\n", AP_HAL::micros());
+        if (switchedOver&&AP_HAL::micros()-last_debug_print>1000) {
+            last_debug_print=AP_HAL::micros();
+            printf("ONE UDP_HIL timer_tick_skipped at %i\n", AP_HAL::micros());
         }
         //TODO not good but for testing
         if (errno == EAGAIN || errno == EWOULDBLOCK) { //|| AP_HAL::micros()<10000000UL
@@ -194,13 +210,15 @@ void UDP_HIL::_timer_tick() {
             return;
         }
     } else if (recv_len == sizeof(buffer)) {
-        printf("got seq %i\n", getSeq(buffer));
+        //if(getSeq(buffer)<3)
+            //printf("got seq %i\n", getSeq(buffer));
         if(!((getSeq(in_data_) == 255 && getSeq(buffer) == 1) || getSeq(buffer) == getSeq(in_data_) + 1 || getSeq(buffer) == 0)){
             printf("FEHLER SEQ NUM FOLGE\n");
             printf("FEHLER SEQ NUM FOLGE: lseq:%i seq:%i \n", getSeq(in_data_), getSeq(buffer));
             printf("FEHLER SEQ NUM FOLGE\n");
             while(1);
         }
+        //last_valid_udp_packet = AP_HAL::micros();
         //setInData((uint8_t*)&buffer);
         setInData(&buffer);
         if (!switchedOver && getSeq(in_data_) > 0)
@@ -215,6 +233,11 @@ void UDP_HIL::_timer_tick() {
         if (sent_len < 0) {
             perror("Fehler beim Senden der Antwort");
         }
+    //clock_gettime(CLOCK_MONOTONIC, &UDP_HIL_TimeOperation_tsp);
+    //UDP_HIL_TimeOperation_difference = (int64_t)(UDP_HIL_TimeOperation_tsp.tv_sec - UDP_HIL_TimeOperation_ts.tv_sec) * (int64_t)1000000000UL + (int64_t)(UDP_HIL_TimeOperation_tsp.tv_nsec - UDP_HIL_TimeOperation_ts.tv_nsec);
+    //printf("Duration of timed operation: %lli\n", UDP_HIL_TimeOperation_difference);
+    //memcpy(&UDP_HIL_TimeOperation_ts, &UDP_HIL_TimeOperation_tsp, sizeof(timespec));
+    
     } else {
         printf("FEHLER RCV_LEN\n");
         printf("FEHLER RCV_LEN: sizeof(buffer):%i recv_len:%i \n", sizeof(buffer), recv_len);

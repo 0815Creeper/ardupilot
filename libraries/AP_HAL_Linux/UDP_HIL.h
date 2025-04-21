@@ -15,6 +15,7 @@
 //#define UDP_HIL_GPS_BUFF_LEN 255
 #define UDP_HIL_PORT 13017
 #define UDP_HIL_RESPONSE_PORT (UDP_HIL_PORT + 1000)
+//#define UDP_FAILSAVE_SWITCHBACK_MICROS 25000
 
 struct GPSStruct {
     int32_t lat; // in 1E7 degrees
@@ -95,6 +96,7 @@ private:
     DataStruct getOutData();
 
     void inDataSwitchOver();
+    //void inDataSwitchBack();
 
     DataStruct in_data_{};
     DataStruct out_data_{};
@@ -106,4 +108,6 @@ private:
     int udp_hil_socket = -1;
     bool socket_inited = false;
     
+    //uint32_t last_valid_udp_packet = 0;
+    uint32_t last_debug_print = 0;
 };
