@@ -147,10 +147,14 @@ if args.frame:
 extra_hwdef.flush()
 extra_defaults.flush()
 
-configure_args = ["./waf", "configure",
+configure_args = ["./waf", "configure", "--static",
                   "--board=%s" % args.board,
                   "--extra-hwdef=%s" % extra_hwdef.name,
                   "--default-param=%s" % extra_defaults.name]
+print(extra_defaults.name)
+with open(extra_defaults.name, 'r') as fin:
+    print(fin.read())
+
 configure_args.extend(unknown_args)
 run_program(configure_args)
 

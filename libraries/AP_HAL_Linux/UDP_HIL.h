@@ -9,9 +9,10 @@
 #include <fcntl.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
+#include "AP_HAL_Linux/PlantModel.h"
 
 #define SEND_SENSORDATA_BACK
-#define IMU_BUFF_LEN 14*8
+#define IMU_BUFF_LEN (3+1+3)*8
 //#define UDP_HIL_GPS_BUFF_LEN 255
 #define UDP_HIL_PORT 13017
 #define UDP_HIL_RESPONSE_PORT (UDP_HIL_PORT + 1000)
@@ -42,7 +43,7 @@ struct DataStruct {
     uint16_t motorPWM3;
     float Baro_pressure;
     float Baro_temprature;
-    uint8_t IMU_buff[IMU_BUFF_LEN];
+    uint16_t IMU_buff[IMU_BUFF_LEN];
     Vector3f MAG_xyz;
     uint8_t seq_num;
     uint8_t gps_len;
@@ -54,6 +55,13 @@ struct DataStruct {
 class UDP_HIL {
 public:
     static UDP_HIL& getInstance();
+
+    //void getPlantIMUbuff(uint16_t* buff, int16_t t2, uint8_t num_samples);
+    Vector3f getPlantAccel();
+    Vector3f getPlantGyro();
+
+    bool getSwitchedOver() const { return switchedOver; }
+    bool getUsePlantModel();
 
     uint8_t getInSeq();
     
@@ -110,4 +118,6 @@ private:
     
     //uint32_t last_valid_udp_packet = 0;
     uint32_t last_debug_print = 0;
+
+    PlantModel plant_model;
 };

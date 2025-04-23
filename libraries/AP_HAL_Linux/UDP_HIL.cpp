@@ -7,7 +7,8 @@
 #include <time.h>
 struct timespec UDP_HIL_TimeOperation_ts;
 struct timespec UDP_HIL_TimeOperation_tsp;
-int64_t UDP_HIL_TimeOperation_difference;
+struct timespec UDP_HIL_tick_nanos;
+struct timespec UDP_HIL_prev_tick_nanos;
 
 UDP_HIL& UDP_HIL::getInstance() {
     static UDP_HIL instance;
@@ -20,6 +21,7 @@ UDP_HIL::UDP_HIL() {
     getValidGPSstate =&UDP_HIL::getOutGPSstate;
     getValidBaro =&UDP_HIL::getOutBaro;
     init_socket();
+    plant_model.init();
 }
 
 void UDP_HIL::init_socket() {
@@ -154,6 +156,7 @@ void UDP_HIL::setOutMotor(uint8_t ch, uint16_t pwm) {
             out_data_.motorPWM3 = pwm;
             break;
     }
+    plant_model.setMotor(ch, pwm);
 }
 
 void UDP_HIL::inDataSwitchOver() {
@@ -172,7 +175,22 @@ void UDP_HIL::inDataSwitchBack() {
     getValidGPSstate =&UDP_HIL::getOutGPSstate;
     getValidBaro =&UDP_HIL::getOutBaro;
 }
+
+void UDP_HIL::getPlantIMUbuff(uint16_t* buff, int16_t t2, uint8_t num_samples) {
+    plant_model.getIMUsamples(buff, t2, num_samples);
+}
 */
+
+Vector3f UDP_HIL::getPlantAccel() {
+    return plant_model.getAccel();
+}
+Vector3f UDP_HIL::getPlantGyro() {
+    return plant_model.getGyro();
+}
+bool UDP_HIL::getUsePlantModel() {
+    return !plant_model.on_gnd;
+}
+
 //#include <unistd.h>     //getpid()
 //#include <pthread.h>    //pthread_self()
 
@@ -183,6 +201,15 @@ void UDP_HIL::_timer_tick() {
         printf("udp_hil_tick_but_socket_not_rdy\n");
         init_socket();
     }
+    
+    clock_gettime(CLOCK_MONOTONIC, &UDP_HIL_tick_nanos);
+    uint64_t dt = (uint64_t)(UDP_HIL_tick_nanos.tv_sec - UDP_HIL_prev_tick_nanos.tv_sec) * (uint64_t)1000000000UL + (uint64_t)(UDP_HIL_tick_nanos.tv_nsec - UDP_HIL_prev_tick_nanos.tv_nsec);
+    UDP_HIL_prev_tick_nanos = UDP_HIL_tick_nanos;
+    if (dt > 3e6) {
+        printf("Plant_model_update dt in UDP_HIL too large: %fms; limiting to 3 ms\n", dt/1.0e6);
+        dt = 3e6;
+    }
+    plant_model.update(dt*1.0e-9);
     //printf("%i\n", sizeof(GPSStruct));
     //printf("PID: %d, Thread-ID: %lu, udp_hil_socket: %d\n", getpid(), pthread_self(), udp_hil_socket);
     struct sockaddr_in client_addr, response_addr;

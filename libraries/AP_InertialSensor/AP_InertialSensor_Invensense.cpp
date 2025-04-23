@@ -736,31 +736,41 @@ bool AP_InertialSensor_Invensense::_accumulate_sensor_rate_sampling(uint8_t *sam
     //cliplimit is set to 15.5g in backend
     const int32_t unscaled_clip_limit = _clip_limit / _accel_scale;
     bool clipped = false;
-    bool ret = true;
+    bool ret = true;/*
 #if defined(MPU9250_UDP_HIL)
-    uint8_t buffer[IMU_BUFF_LEN];
-    (UDP_HIL::getInstance().*UDP_HIL::getInstance().getValidIMUbuff)(buffer);
+// *** stack smashing detected ***: terminated
+    uint16_t buffer[IMU_BUFF_LEN];
+    //(UDP_HIL::getInstance().*UDP_HIL::getInstance().getValidIMUbuff)(buffer);
+    UDP_HIL::getInstance().getPlantIMUbuff(buffer, int16_val(samples, 3), MPU_FIFO_BUFFER_LEN);
     UDP_HIL::getInstance().setOutIMUbuff(samples, n_samples);
-#endif
+#endif*/
     for (uint8_t i = 0; i < n_samples; i++) {
-
+/*
 #if defined(MPU9250_SocketMode) || defined(MPU9250_SocketModePrint) || defined(MPU9250_UDP_HIL)
 #if defined(MPU9250_UDP_HIL)
-        uint8_t buff_or = 0;
-        for(int j=0; j<MPU_SAMPLE_SIZE; j++) {
-            buff_or |= buffer[j+MPU_SAMPLE_SIZE * i];
+        uint16_t buff_or = 0;
+        for(int j=0; j<7; j++) {
+            buff_or |= buffer[j+7 * i];
         }
         const uint8_t *data = buff_or ? (buffer + MPU_SAMPLE_SIZE * i):(samples + MPU_SAMPLE_SIZE * i);
         if (!buff_or && UDP_HIL::getInstance().getInSeq() != 0) {
             printf("one invalid imu_udp_hil_sample at index %i \n", i);
         }
+        //const uint8_t *data = ((uint8_t*)buffer) + MPU_SAMPLE_SIZE * i;
 #else
-        const uint8_t *data = buffer + 1 + MPU_SAMPLE_SIZE * i;
+        //const uint8_t *data = buffer + 1 + MPU_SAMPLE_SIZE * i;
 #endif        
 #else
-        const uint8_t *data = samples + MPU_SAMPLE_SIZE * i;
+        //const uint8_t *data = samples + MPU_SAMPLE_SIZE * i;
 #endif
-
+        uint8_t *data;
+        if(AP_HAL::millis()>10000UL) {
+            data = ((uint8_t*)buffer) + MPU_SAMPLE_SIZE * i;
+        }else{
+            data = samples + MPU_SAMPLE_SIZE * i;
+        }
+        */
+        const uint8_t *data = samples + MPU_SAMPLE_SIZE * i;
         // use temperature to detect FIFO corruption
         int16_t t2 = int16_val(data, 3);
         if (!_check_raw_temp(t2)) {
@@ -801,7 +811,25 @@ bool AP_InertialSensor_Invensense::_accumulate_sensor_rate_sampling(uint8_t *sam
             if (_accum.accel_count % _accel_fifo_downsample_rate == 0) {
                 _accum.accel *= _fifo_accel_scale;
                 _rotate_and_correct_accel(_accel_instance, _accum.accel);
+                #ifdef MPU9250_UDP_HIL
+                //static bool first = true;
+                /*if (first) {
+                    printf("IMU_MPU9250: accum accel %f %f %f\n", _accum.accel.x, _accum.accel.y, _accum.accel.z);
+                    if (_accum.accel.z > 2.5f || _accum.accel.y > 2.5f || _accum.accel.z < -2.5f || _accum.accel.y < -2.5f) {
+                        first = false;
+                    }
+                    //printf("IMU_MPU9250: plant accel %f %f %f\n", UDP_HIL::getInstance().getPlantAccel().x, UDP_HIL::getInstance().getPlantAccel().y, UDP_HIL::getInstance().getPlantAccel().z);
+                }*/
+                //printf("IMU_MPU9250: accum accel %f %f %f\n", _accum.accel.x, _accum.accel.y, _accum.accel.z);
+                //printf("IMU_MPU9250: plant accel %f %f %f\n", UDP_HIL::getInstance().getPlantAccel().x, UDP_HIL::getInstance().getPlantAccel().y, UDP_HIL::getInstance().getPlantAccel().z);
+                if (UDP_HIL::getInstance().getUsePlantModel()) {
+                    _notify_new_accel_raw_sample(_accel_instance, UDP_HIL::getInstance().getPlantAccel(), 0, false);
+                } else {
+                    _notify_new_accel_raw_sample(_accel_instance, _accum.accel, 0, false);
+                }
+                #else
                 _notify_new_accel_raw_sample(_accel_instance, _accum.accel, 0, false);
+                #endif
                 _accum.accel.zero();
                 _accum.accel_count = 0;
                 // we assume that the gyro rate is always >= and a multiple of the accel rate
@@ -823,7 +851,25 @@ bool AP_InertialSensor_Invensense::_accumulate_sensor_rate_sampling(uint8_t *sam
         if (_accum.gyro_count % _gyro_fifo_downsample_rate == 0) {
             _accum.gyro *= _fifo_gyro_scale;
             _rotate_and_correct_gyro(_gyro_instance, _accum.gyro);
+            #ifdef MPU9250_UDP_HIL
+            /*static bool first = true;
+            if (first) {
+                printf("IMU_MPU9250: accum gyro %f %f %f\n", _accum.gyro.x, _accum.gyro.y, _accum.gyro.z);
+                if (_accum.gyro.x > 2.5f || _accum.gyro.y > 2.5f || _accum.gyro.x < -2.5f || _accum.gyro.y < -2.5f) {
+                    first = false;
+                }
+                //printf("IMU_MPU9250: plant accel %f %f %f\n", UDP_HIL::getInstance().getPlantAccel().x, UDP_HIL::getInstance().getPlantAccel().y, UDP_HIL::getInstance().getPlantAccel().z);
+            }*/
+            //printf("IMU_MPU9250: accum gyro %f %f %f\n", _accum.gyro.x, _accum.gyro.y, _accum.gyro.z);
+            //printf("IMU_MPU9250: plant gyro %f %f %f\n", UDP_HIL::getInstance().getPlantGyro().x, UDP_HIL::getInstance().getPlantGyro().y, UDP_HIL::getInstance().getPlantGyro().z);
+            if (UDP_HIL::getInstance().getUsePlantModel()) {
+                _notify_new_gyro_raw_sample(_gyro_instance, UDP_HIL::getInstance().getPlantGyro());
+            } else {
+                _notify_new_gyro_raw_sample(_gyro_instance, _accum.gyro);
+            }
+            #else
             _notify_new_gyro_raw_sample(_gyro_instance, _accum.gyro);
+            #endif
             _accum.gyro.zero();
         }
     }
