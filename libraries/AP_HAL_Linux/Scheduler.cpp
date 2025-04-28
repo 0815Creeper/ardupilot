@@ -16,7 +16,11 @@
 #include "RCInput.h"
 #include "SPIUARTDriver.h"
 #include "Storage.h"
+
+#ifdef UDP_HIL_ENABLED
 #include "UDP_HIL.h"
+#endif
+
 #include "UARTDriver.h"
 #include "Util.h"
 
@@ -27,7 +31,9 @@ extern const AP_HAL::HAL& hal;
 #define APM_LINUX_MAX_PRIORITY          20
 #define APM_LINUX_TIMER_PRIORITY        15
 #define APM_LINUX_UART_PRIORITY         14
+#ifdef UDP_HIL_ENABLED
 #define APM_LINUX_UDP_HIL_PRIORITY      14//try finally 11 (same as logging maybe?)
+#endif
 #define APM_LINUX_NET_PRIORITY          14
 #define APM_LINUX_RCIN_PRIORITY         13
 #define APM_LINUX_MAIN_PRIORITY         12
@@ -36,7 +42,9 @@ extern const AP_HAL::HAL& hal;
 
 #define APM_LINUX_TIMER_RATE            1000
 #define APM_LINUX_UART_RATE             100
+#ifdef UDP_HIL_ENABLED
 #define APM_LINUX_UDP_HIL_RATE           1000
+#endif
 #if CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_LINUX_NAVIO ||    \
     CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_LINUX_ERLEBRAIN2 || \
     CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_LINUX_BH || \
@@ -116,7 +124,9 @@ void Scheduler::init()
         SCHED_THREAD(uart, UART),
         SCHED_THREAD(rcin, RCIN),
         SCHED_THREAD(io, IO),
+        #ifdef UDP_HIL_ENABLED
         SCHED_THREAD(udp_hil, UDP_HIL),
+        #endif
     };
 
     _main_ctx = pthread_self();
@@ -155,12 +165,18 @@ void Scheduler::_debug_stack()
                 "\tio    = %zu\n"
                 "\trcin  = %zu\n"
                 "\tuart  = %zu\n"
-                "\thil   = %zu\n",
+                #ifdef UDP_HIL_ENABLED
+                "\thil   = %zu\n"
+                #endif
+                ,
                 _timer_thread.get_stack_usage(),
                 _io_thread.get_stack_usage(),
                 _rcin_thread.get_stack_usage(),
-                _uart_thread.get_stack_usage(),
-                _udp_hil_thread.get_stack_usage());
+                _uart_thread.get_stack_usage()
+                #ifdef UDP_HIL_PWM
+                ,_udp_hil_thread.get_stack_usage()
+                #endif
+                );
         _last_stack_debug_msec = now;
     }
 }
@@ -295,11 +311,13 @@ void Scheduler::_uart_task()
     _run_uarts();
 }
 
+#ifdef UDP_HIL_ENABLED
 void Scheduler::_udp_hil_task()
 {
     //printf("_udp_hil_task \n");
     UDP_HIL::getInstance()._timer_tick();
 }
+#endif
 
 void Scheduler::_io_task()
 {
@@ -372,13 +390,17 @@ void Scheduler::teardown()
     _io_thread.stop();
     _rcin_thread.stop();
     _uart_thread.stop();
+    #ifdef UDP_HIL_ENABLED
     _udp_hil_thread.stop();
+    #endif
 
     _timer_thread.join();
     _io_thread.join();
     _rcin_thread.join();
     _uart_thread.join();
+    #ifdef UDP_HIL_ENABLED
     _udp_hil_thread.join();
+    #endif
 }
 
 // calculates an integer to be used as the priority for a newly-created thread
@@ -398,7 +420,9 @@ uint8_t Scheduler::calculate_thread_priority(priority_base base, int8_t priority
         { PRIORITY_RCIN, APM_LINUX_RCIN_PRIORITY},
         { PRIORITY_IO, APM_LINUX_IO_PRIORITY},
         { PRIORITY_UART, APM_LINUX_UART_PRIORITY},
+        #ifdef UDP_HIL_ENABLED
         { PRIORITY_UDP_HIL, APM_LINUX_UDP_HIL_PRIORITY},
+        #endif
         { PRIORITY_STORAGE, APM_LINUX_IO_PRIORITY},
         { PRIORITY_SCRIPTING, APM_LINUX_SCRIPTING_PRIORITY},
         { PRIORITY_NET, APM_LINUX_NET_PRIORITY},

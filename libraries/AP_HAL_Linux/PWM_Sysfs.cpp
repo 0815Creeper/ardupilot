@@ -26,7 +26,10 @@
 
 #include <AP_HAL/AP_HAL.h>
 #include <AP_Math/AP_Math.h>
+
+#ifdef UDP_HIL_PWM
 #include <AP_HAL_Linux/UDP_HIL.h>
+#endif
 
 extern const AP_HAL::HAL& hal;
 
@@ -127,8 +130,11 @@ uint32_t PWM_Sysfs_Base::get_freq()
 
 bool PWM_Sysfs_Base::set_duty_cycle(uint32_t nsec_duty_cycle)
 {
+    #ifdef UDP_HIL_PWM
     //printf("pwm %i: %i\n", _channel, nsec_duty_cycle);
     UDP_HIL::getInstance().setOutMotor(_channel, (uint16_t)(nsec_duty_cycle/1000));
+    #endif
+    
     /* Don't log fails since this could spam the console */
     if (dprintf(_duty_cycle_fd, "%u", nsec_duty_cycle) < 0) {
         return false;

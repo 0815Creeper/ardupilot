@@ -1,57 +1,57 @@
 #pragma once
 
 #include <AP_Math/AP_Math.h>
-#include <AP_Math/quaternion.h>
 
 // Plant Parameters
-#define PLANT_INERTIA_ROLL  0.03//1.43e-3f // Roll inertia
-#define PLANT_INERTIA_PITCH 0.03//1.43e-3f // Pitch inertia
-#define PLANT_INERTIA_YAW   0.06//2.89e-3f // Yaw inertia
-#define PLANT_MASS            1.0f //0.622f // kg
+#define PLANT_INERTIA_ROLL  1.43e-3f // Roll inertia
+#define PLANT_INERTIA_PITCH 1.43e-3f // Pitch inertia
+#define PLANT_INERTIA_YAW   2.89e-3f // Yaw inertia
+#define PLANT_MASS            0.622f // kg
 #define PLANT_ARM_LENGTH      0.185f // m (370 mm Diagonale)
-#define PLANT_THRUST_FACT      8.00f // thrust factor (N)
+#define PLANT_THRUST_FACT      5.00f // thrust factor (N)
 #define PLANT_YAW_TORQUE_FACT  0.05f // Yaw torque factor
+
+#define LAT_SCALE (10000000.0/111120.0) // 1e7deg/m
+#define LON_SCALE (10000000.0/74625.0) // 1e7deg/m; at 48°latitude
 
 class PlantModel {
 public:
-    // --- Lifecycle ------------------------------------------------
-    void init();                // Zustand auf Null / Hover-Reset
-    void update(float dt);      // Hauptaufruf (dt in Sekunden, z.B. 0.001f)
-
-    // --- IMU-Schnittstelle ---------------------------------------
-    Vector3f getAccel();        // m/s^2, IMU-Frame (Body)
-    Vector3f getGyro();         // rad/s  , IMU-Frame (Body)
-
-    // --- Hilfsfunktionen -----------------------------------------
-    Matrix3f rotation_matrix(); // Body -> Welt Rotmat (falls extern gebraucht)
-    Vector3f getEuler() const { 
-        Vector3f v;
-        q_att.to_euler(v);
-        return v;
-    } // Roll, Pitch, Yaw (rad)
-
-    void setMotor(uint8_t ch, uint16_t pwm); // PWM 1000–1950 -> Motor 0–1
-
-    // --- Öffentliche Felder --------------------------------------
-    Vector3f position;   // m    (Welt)
-    Vector3f velocity;   // m/s  (Welt)
-
-    bool on_gnd = true;  // einfacher Bodenstatus
+    void init();
+    void update(float dt);
+    
+    //void getIMUsamples(uint16_t* buff, int16_t t2, uint8_t num_samples);
+    Vector3f getAccel();
+    Vector3f getGyro();
+    bool isOnGround() { return on_gnd; }
+    void setMotor(uint8_t ch, uint16_t pwm);
+    Vector3f getPosition() { return position; }
+    Vector3f getVelocity() { return velocity; }
+    void addGPS(int32_t* lat, int32_t* lon, int32_t* alt);
+    void setBaro(float* pressure);
+    bool on_gnd = true;
 
 private:
-    // --- Zustand --------------------------------------------------
-    Quaternion q_att;     // Orientierung (Body -> Welt)
-    Vector3f   omega;     // rad/s  (Body)
-    Vector3f   accel;     // m/s^2  (Body)
-    Vector3f   gyro;      // rad/s  (Body)
+    // Sensor-Ausgaben (wie IMU)
+    Vector3f accel;   // m/s²
+    Vector3f gyro;    // rad/s
 
-    // --- Parameter / Motoren -------------------------------------
-    float motor_outputs[4]; // 0..1 normiert
+    // Zustand (optional zur Analyse)
+    Vector3f position;   // m
+    Vector3f velocity;   // m/s
+    Vector3f angles;     // rad (Roll, Pitch, Yaw)
+    Vector3f omega;      // rad/s
 
-    // --- Inertia --------------------------------------------------
-    Matrix3f inertia;     // diagonal (Ix,Iy,Iz)
+    // Motorbefehle [0 … +1]
+    float motor_outputs[4]; // 4 Motoren in X-Konfiguration
 
-    // --- Interne Hilfsfunktionen ---------------------------------
-    Vector3f thrust_body();   // Schub-Vektor im Body frame
-    Vector3f torque_body();   // Roll/Pitch/Yaw-Momente im Body frame
+    float mass = PLANT_MASS;
+    float arm_length = PLANT_ARM_LENGTH;
+    Matrix3f inertia;
+
+
+    // Intern
+    Vector3f thrust_body();
+    Vector3f torque_body();
+    Matrix3f rotation_matrix();
+    
 };

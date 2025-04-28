@@ -7,6 +7,7 @@
 #include "AP_HAL_Boards.h"
 #include "AP_HAL_Namespace.h"
 
+#include <AP_HAL_Linux/Experiments.h>
 
 class AP_HAL::Scheduler {
 public:
@@ -107,7 +108,9 @@ public:
         PRIORITY_SPI,
         PRIORITY_I2C,
         PRIORITY_CAN,
+        #ifdef UDP_HIL_ENABLED
         PRIORITY_UDP_HIL,
+        #endif
         PRIORITY_TIMER,
         PRIORITY_RCOUT,
         PRIORITY_LED,

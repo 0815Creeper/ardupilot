@@ -25,7 +25,7 @@
 
 #include <AP_InertialSensor/AP_InertialSensor_Invensense.h>
 
-#define AK8963_UDP_HIL
+//#define AK8963_UDP_HIL
 
 #ifdef AK8963_UDP_HIL
 #include <stdio.h>

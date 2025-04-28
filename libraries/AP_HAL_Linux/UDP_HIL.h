@@ -3,20 +3,15 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <mutex>
-//#include "AP_Common/Location.h"
-//#include "AP_GPS/AP_GPS.h"
+#include <AP_InertialSensor/AP_InertialSensor_Invensense.h>
 
 #include <fcntl.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
-#include "AP_HAL_Linux/PlantModel.h"
 
 #define SEND_SENSORDATA_BACK
-#define IMU_BUFF_LEN (3+1+3)*8
-//#define UDP_HIL_GPS_BUFF_LEN 255
 #define UDP_HIL_PORT 13017
 #define UDP_HIL_RESPONSE_PORT (UDP_HIL_PORT + 1000)
-//#define UDP_FAILSAVE_SWITCHBACK_MICROS 25000
 
 struct GPSStruct {
     int32_t lat; // in 1E7 degrees
@@ -43,25 +38,19 @@ struct DataStruct {
     uint16_t motorPWM3;
     float Baro_pressure;
     float Baro_temprature;
-    uint16_t IMU_buff[IMU_BUFF_LEN];
+    uint16_t IMU_buff[MPU_SAMPLE_SIZE*MPU_FIFO_BUFFER_LEN/sizeof(uint16_t)];
     Vector3f MAG_xyz;
     uint8_t seq_num;
     uint8_t gps_len;
     uint8_t gps_setup;
     GPSStruct GPSstate;
-    //uint8_t GPS_buff[UDP_HIL_GPS_BUFF_LEN];
 };
 
 class UDP_HIL {
 public:
     static UDP_HIL& getInstance();
 
-    //void getPlantIMUbuff(uint16_t* buff, int16_t t2, uint8_t num_samples);
-    Vector3f getPlantAccel();
-    Vector3f getPlantGyro();
-
     bool getSwitchedOver() const { return switchedOver; }
-    bool getUsePlantModel();
 
     uint8_t getInSeq();
     
@@ -104,7 +93,6 @@ private:
     DataStruct getOutData();
 
     void inDataSwitchOver();
-    //void inDataSwitchBack();
 
     DataStruct in_data_{};
     DataStruct out_data_{};
@@ -115,9 +103,6 @@ private:
     
     int udp_hil_socket = -1;
     bool socket_inited = false;
-    
-    //uint32_t last_valid_udp_packet = 0;
-    uint32_t last_debug_print = 0;
 
-    PlantModel plant_model;
+    uint32_t last_debug_print = 0;
 };

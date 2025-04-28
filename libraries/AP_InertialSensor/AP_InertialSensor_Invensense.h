@@ -22,6 +22,9 @@
 #include "AP_InertialSensor_Backend.h"
 #include "AuxiliaryBus.h"
 
+#define MPU_SAMPLE_SIZE 14
+#define MPU_FIFO_BUFFER_LEN 8
+
 class AP_Invensense_AuxiliaryBus;
 class AP_Invensense_AuxiliaryBusSlave;
 

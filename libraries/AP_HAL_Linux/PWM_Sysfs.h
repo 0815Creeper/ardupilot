@@ -5,6 +5,8 @@
 #include "AP_HAL_Linux.h"
 #include "Util.h"
 
+#include <AP_HAL_Linux/Experiments.h>
+
 namespace Linux {
 
 class PWM_Sysfs_Base {

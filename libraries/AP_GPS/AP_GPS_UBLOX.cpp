@@ -29,7 +29,7 @@
 #include "RTCM3_Parser.h"
 #include <stdio.h>
 
-#define GPS_UDP_HIL
+//#define GPS_UDP_HIL
 
 #ifdef GPS_UDP_HIL
 #include "AP_HAL_Linux/UDP_HIL.h"

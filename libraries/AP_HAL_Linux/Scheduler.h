@@ -102,13 +102,17 @@ private:
     SchedulerThread _io_thread{FUNCTOR_BIND_MEMBER(&Scheduler::_io_task, void), *this};
     SchedulerThread _rcin_thread{FUNCTOR_BIND_MEMBER(&Scheduler::_rcin_task, void), *this};
     SchedulerThread _uart_thread{FUNCTOR_BIND_MEMBER(&Scheduler::_uart_task, void), *this};
+    #ifdef UDP_HIL_ENABLED
     SchedulerThread _udp_hil_thread{FUNCTOR_BIND_MEMBER(&Scheduler::_udp_hil_task, void), *this};
+    #endif
 
     void _timer_task();
     void _io_task();
     void _rcin_task();
     void _uart_task();
+    #ifdef UDP_HIL_ENABLED
     void _udp_hil_task();
+    #endif
 
     void _run_io();
     void _run_uarts();

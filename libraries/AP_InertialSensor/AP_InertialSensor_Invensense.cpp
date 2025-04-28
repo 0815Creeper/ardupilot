@@ -29,40 +29,21 @@
 #include "AP_InertialSensor_Invensense.h"
 #include <GCS_MAVLink/GCS.h>
 
+#include <AP_HAL_Linux/Experiments.h>
 
-#define MPU9250_UDP_HIL
-//#define MPU9250_TimeOperation
-//#define MPU9250_SocketMode
-//#define MPU9250_SocketModePrint
-//
-#ifdef MPU9250_UDP_HIL
+#ifdef UDP_HIL_MPU9250
 #include "AP_HAL_Linux/UDP_HIL.h"
 #endif
-#ifdef MPU9250_TimeOperation
+
+#if defined(TIMING_EXPERIMENT_MPU9250_POLLDATA_DURATION_SYSTEM) || defined(TIMING_EXPERIMENT_MPU9250_POLLDATA_DURATION_PROCESS) || defined(TIMING_EXPERIMENT_MPU9250_POLLDATA_DURATION_THREAD)
 #include <time.h>
 struct timespec MPU9250_TimeOperation_ts;
 struct timespec MPU9250_TimeOperation_tsp;
-int64_t MPU9250_TimeOperation_difference;
-#define MPU9250_TimeOperation_START() clock_gettime(CLOCK_MONOTONIC, &MPU9250_TimeOperation_ts)
-#define MPU9250_TimeOperation_STOP() clock_gettime(CLOCK_MONOTONIC, &MPU9250_TimeOperation_tsp);MPU9250_TimeOperation_difference = (int64_t)(MPU9250_TimeOperation_tsp.tv_sec - MPU9250_TimeOperation_ts.tv_sec) * (int64_t)1000000000UL + (int64_t)(MPU9250_TimeOperation_tsp.tv_nsec - MPU9250_TimeOperation_ts.tv_nsec);printf("Duration of timed operation: %lli\n", MPU9250_TimeOperation_difference)
-#else
-#define MPU9250_TimeOperation_START() ;
-#define MPU9250_TimeOperation_STOP() ;
 #endif
-#if defined(MPU9250_SocketMode) || defined(MPU9250_SocketModePrint)
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <arpa/inet.h>
-#include <sys/socket.h>
-#define MPU9250_PORT 13016
-#define MPU9250_RESPONSE_PORT (MPU9250_PORT + 1000) // Immer auf 14016 antworten
-#define MPU9250_RCV_SIZE (1+MPU_SAMPLE_SIZE*MPU_FIFO_BUFFER_LEN) // MPU_SAMPLE_SIZE, MPU_FIFO_BUFFER_LEN 8
-#define MPU9250_BUFFER_SIZE (MPU9250_RCV_SIZE + 4) 
-static int MPU9250_udp_socket = -1;
-static uint8_t MPU9250_last_seq_num = 0;
+#ifdef TIMING_EXPERIMENT_MPU9250_POLLDATA_CALL_PRECISION
+#include <time.h>
+struct timespec MPU9250_CallPrecision_nanos;
+struct timespec MPU9250_CallPrecision_prev_nanos;
 #endif
 
 extern const AP_HAL::HAL& hal;
@@ -109,9 +90,6 @@ extern const AP_HAL::HAL& hal;
 #endif
 
 #include "AP_InertialSensor_Invensense_registers.h"
-
-#define MPU_SAMPLE_SIZE 14
-#define MPU_FIFO_BUFFER_LEN 8
 
 #define int16_val(v, idx) ((int16_t)(((uint16_t)v[2*idx] << 8) | v[2*idx+1]))
 #define uint16_val(v, idx)(((uint16_t)v[2*idx] << 8) | v[2*idx+1])
@@ -259,30 +237,6 @@ bool AP_InertialSensor_Invensense::_has_auxiliary_bus()
 
 void AP_InertialSensor_Invensense::start()
 {
-#if defined(MPU9250_SocketMode) || defined(MPU9250_SocketModePrint)
-    struct sockaddr_in server_addr;
-    // UDP-Socket erstellen
-    MPU9250_udp_socket = socket(AF_INET, SOCK_DGRAM, 0);
-    if (MPU9250_udp_socket < 0) {
-        perror("Socket konnte nicht erstellt werden");
-        exit(EXIT_FAILURE);
-    }
-    // Nicht-blockierenden Modus aktivieren
-    int flags = fcntl(MPU9250_udp_socket, F_GETFL, 0);
-    fcntl(MPU9250_udp_socket, F_SETFL, flags | O_NONBLOCK);
-    // Serveradresse konfigurieren
-    memset(&server_addr, 0, sizeof(server_addr));
-    server_addr.sin_family = AF_INET;
-    server_addr.sin_addr.s_addr = INADDR_ANY;
-    server_addr.sin_port = htons(MPU9250_PORT);
-    // Socket an Port binden
-    if (bind(MPU9250_udp_socket, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
-        perror("Bind fehlgeschlagen");
-        close(MPU9250_udp_socket);
-        exit(EXIT_FAILURE);
-    }
-    printf("IMU_MPU9250: UDP-Socket initialisiert (Port %d, non-blocking), micros: %u\n", MPU9250_PORT, AP_HAL::micros());
-#endif
     // pre-fetch instance numbers for checking fast sampling settings
     if (!_imu.get_gyro_instance(_gyro_instance) || !_imu.get_accel_instance(_accel_instance)) {
         return;
@@ -589,11 +543,41 @@ bool AP_InertialSensor_Invensense::_data_ready()
  */
 void AP_InertialSensor_Invensense::_poll_data()
 {
+    #ifdef TIMING_EXPERIMENT_MPU9250_POLLDATA_CALL_PRECISION
+    clock_gettime(CLOCK_MONOTONIC, &MPU9250_CallPrecision_nanos);
+    uint64_t MPU9250_CallPrecision_difference = (int64_t)(MPU9250_CallPrecision_nanos.tv_sec - MPU9250_CallPrecision_prev_nanos.tv_sec) * (int64_t)1000000000UL + (int64_t)(MPU9250_CallPrecision_nanos.tv_nsec - MPU9250_CallPrecision_prev_nanos.tv_nsec);
+    MPU9250_CallPrecision_prev_nanos = MPU9250_CallPrecision_nanos;
+    TIMING_EXPERIMENT_MPU9250_OUTPUT(MPU9250_CallPrecision_difference);
+    #endif
+    #if defined(TIMING_EXPERIMENT_MPU9250_POLLDATA_DURATION_PROCESS)
+    clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &MPU9250_TimeOperation_ts);
+    #endif
+    #if defined(TIMING_EXPERIMENT_MPU9250_POLLDATA_DURATION_THREAD)
+    clock_gettime(CLOCK_THREAD_CPUTIME_ID, &MPU9250_TimeOperation_ts);
+    #endif
+    #if defined(TIMING_EXPERIMENT_MPU9250_POLLDATA_DURATION_SYSTEM)
+    clock_gettime(CLOCK_MONOTONIC, &MPU9250_TimeOperation_ts);
+    #endif
+
     _read_fifo();
 
 #if INVENSENSE_DEBUG_REG_CHANGE
     _check_register_change();
 #endif // INVENSENSE_DEBUG_REG_CHANGE
+
+    #ifdef TIMING_EXPERIMENT_MPU9250_POLLDATA_DURATION_PROCESS
+    clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &MPU9250_TimeOperation_tsp);
+    #endif
+    #ifdef TIMING_EXPERIMENT_MPU9250_POLLDATA_DURATION_THREAD
+    clock_gettime(CLOCK_THREAD_CPUTIME_ID, &MPU9250_TimeOperation_tsp);
+    #endif  
+    #ifdef TIMING_EXPERIMENT_MPU9250_POLLDATA_DURATION_SYSTEM
+    clock_gettime(CLOCK_MONOTONIC, &MPU9250_TimeOperation_tsp);
+    #endif
+    #if defined(TIMING_EXPERIMENT_MPU9250_POLLDATA_DURATION_SYSTEM) || defined(TIMING_EXPERIMENT_MPU9250_POLLDATA_DURATION_PROCESS) || defined(TIMING_EXPERIMENT_MPU9250_POLLDATA_DURATION_THREAD)
+    uint64_t MPU9250_TimeOperation_difference = (int64_t)(MPU9250_TimeOperation_tsp.tv_sec - MPU9250_TimeOperation_ts.tv_sec) * (int64_t)1000000000UL + (int64_t)(MPU9250_TimeOperation_tsp.tv_nsec - MPU9250_TimeOperation_ts.tv_nsec);
+    TIMING_EXPERIMENT_MPU9250_OUTPUT(MPU9250_TimeOperation_difference);
+    #endif
 }
 
 #if INVENSENSE_DEBUG_REG_CHANGE
@@ -697,86 +681,33 @@ bool AP_InertialSensor_Invensense::_accumulate(uint8_t *samples, uint8_t n_sampl
  */
 bool AP_InertialSensor_Invensense::_accumulate_sensor_rate_sampling(uint8_t *samples, uint8_t n_samples)
 {
-    MPU9250_TimeOperation_START();
-    //1 khz
-    //printf("IMU_MPU9250: accum; micros: %u\n", AP_HAL::micros());
     int32_t tsum = 0;
-    //if (AP_HAL::micros()%1000000UL > 900000UL)
-    //{
-    //    return 0;
-    //}
 
-#if defined(MPU9250_SocketMode) || defined(MPU9250_SocketModePrint)
-    uint32_t send_micros = AP_HAL::micros();
-    struct sockaddr_in client_addr, response_addr;
-    socklen_t addr_len = sizeof(client_addr);
-    uint8_t buffer[MPU9250_BUFFER_SIZE];
-    uint8_t seq_num = 0;
-    
-    ssize_t recv_len = recvfrom(MPU9250_udp_socket, buffer, MPU9250_RCV_SIZE, 0,
-                                (struct sockaddr *)&client_addr, &addr_len);
-    if (recv_len == MPU9250_RCV_SIZE) {
-        // Daten aus dem Puffer extrahieren
-        seq_num = buffer[0];  // 8-Bit-Sequenznummer
-        while(!((MPU9250_last_seq_num == 255 && seq_num == 1) || seq_num == MPU9250_last_seq_num + 1)){
-            printf("FEHLER SEQ NUM FOLGE\n");
-            printf("FEHLER SEQ NUM FOLGE: lseq:%i seq:%i \n",MPU9250_last_seq_num, seq_num );
-            printf("FEHLER SEQ NUM FOLGE\n");
-            while(1);
-        }
-        MPU9250_last_seq_num = seq_num;
-
-    }else if(recv_len != -1){
-        printf("FEHLER RCV_LEN\n");
-        printf("FEHLER RCV_LEN: MPU9250_RCV_SIZE:%i recv_len:%i \n",MPU9250_RCV_SIZE, recv_len );
-        printf("FEHLER RCV_LEN\n");
-        while(1);
-    }
-#endif
     //cliplimit is set to 15.5g in backend
     const int32_t unscaled_clip_limit = _clip_limit / _accel_scale;
     bool clipped = false;
-    bool ret = true;/*
-#if defined(MPU9250_UDP_HIL)
-// *** stack smashing detected ***: terminated
-    uint16_t buffer[IMU_BUFF_LEN];
-    //(UDP_HIL::getInstance().*UDP_HIL::getInstance().getValidIMUbuff)(buffer);
-    UDP_HIL::getInstance().getPlantIMUbuff(buffer, int16_val(samples, 3), MPU_FIFO_BUFFER_LEN);
+    bool ret = true;
+    #if defined(UDP_HIL_MPU9250)
+    uint8_t buffer[MPU_SAMPLE_SIZE * MPU_FIFO_BUFFER_LEN];
+    (UDP_HIL::getInstance().*UDP_HIL::getInstance().getValidIMUbuff)(buffer);
     UDP_HIL::getInstance().setOutIMUbuff(samples, n_samples);
-#endif*/
+    #endif
     for (uint8_t i = 0; i < n_samples; i++) {
-/*
-#if defined(MPU9250_SocketMode) || defined(MPU9250_SocketModePrint) || defined(MPU9250_UDP_HIL)
-#if defined(MPU9250_UDP_HIL)
-        uint16_t buff_or = 0;
-        for(int j=0; j<7; j++) {
-            buff_or |= buffer[j+7 * i];
+        #if defined(UDP_HIL_MPU9250)
+        uint8_t buff_or = 0;
+        for(int j=0; j<MPU_SAMPLE_SIZE; j++) {
+            buff_or |= buffer[i*MPU_SAMPLE_SIZE+j];
         }
         const uint8_t *data = buff_or ? (buffer + MPU_SAMPLE_SIZE * i):(samples + MPU_SAMPLE_SIZE * i);
         if (!buff_or && UDP_HIL::getInstance().getInSeq() != 0) {
             printf("one invalid imu_udp_hil_sample at index %i \n", i);
         }
-        //const uint8_t *data = ((uint8_t*)buffer) + MPU_SAMPLE_SIZE * i;
-#else
-        //const uint8_t *data = buffer + 1 + MPU_SAMPLE_SIZE * i;
-#endif        
-#else
-        //const uint8_t *data = samples + MPU_SAMPLE_SIZE * i;
-#endif
-        uint8_t *data;
-        if(AP_HAL::millis()>10000UL) {
-            data = ((uint8_t*)buffer) + MPU_SAMPLE_SIZE * i;
-        }else{
-            data = samples + MPU_SAMPLE_SIZE * i;
-        }
-        */
+        #else
         const uint8_t *data = samples + MPU_SAMPLE_SIZE * i;
+        #endif
         // use temperature to detect FIFO corruption
         int16_t t2 = int16_val(data, 3);
         if (!_check_raw_temp(t2)) {
-            #if defined(MPU9250_SocketMode) || defined(MPU9250_SocketModePrint)
-            printf("FIFO RESET \nFIFO RESET \nFIFO RESET \nFIFO RESET \nFIFO RESET \n");
-            #endif
             if (_enable_fast_fifo_reset) {
                 _fast_fifo_reset();
                 ret = false;
@@ -811,25 +742,7 @@ bool AP_InertialSensor_Invensense::_accumulate_sensor_rate_sampling(uint8_t *sam
             if (_accum.accel_count % _accel_fifo_downsample_rate == 0) {
                 _accum.accel *= _fifo_accel_scale;
                 _rotate_and_correct_accel(_accel_instance, _accum.accel);
-                #ifdef MPU9250_UDP_HIL
-                //static bool first = true;
-                /*if (first) {
-                    printf("IMU_MPU9250: accum accel %f %f %f\n", _accum.accel.x, _accum.accel.y, _accum.accel.z);
-                    if (_accum.accel.z > 2.5f || _accum.accel.y > 2.5f || _accum.accel.z < -2.5f || _accum.accel.y < -2.5f) {
-                        first = false;
-                    }
-                    //printf("IMU_MPU9250: plant accel %f %f %f\n", UDP_HIL::getInstance().getPlantAccel().x, UDP_HIL::getInstance().getPlantAccel().y, UDP_HIL::getInstance().getPlantAccel().z);
-                }*/
-                //printf("IMU_MPU9250: accum accel %f %f %f\n", _accum.accel.x, _accum.accel.y, _accum.accel.z);
-                //printf("IMU_MPU9250: plant accel %f %f %f\n", UDP_HIL::getInstance().getPlantAccel().x, UDP_HIL::getInstance().getPlantAccel().y, UDP_HIL::getInstance().getPlantAccel().z);
-                if (UDP_HIL::getInstance().getUsePlantModel()) {
-                    _notify_new_accel_raw_sample(_accel_instance, UDP_HIL::getInstance().getPlantAccel(), 0, false);
-                } else {
-                    _notify_new_accel_raw_sample(_accel_instance, _accum.accel, 0, false);
-                }
-                #else
                 _notify_new_accel_raw_sample(_accel_instance, _accum.accel, 0, false);
-                #endif
                 _accum.accel.zero();
                 _accum.accel_count = 0;
                 // we assume that the gyro rate is always >= and a multiple of the accel rate
@@ -851,25 +764,7 @@ bool AP_InertialSensor_Invensense::_accumulate_sensor_rate_sampling(uint8_t *sam
         if (_accum.gyro_count % _gyro_fifo_downsample_rate == 0) {
             _accum.gyro *= _fifo_gyro_scale;
             _rotate_and_correct_gyro(_gyro_instance, _accum.gyro);
-            #ifdef MPU9250_UDP_HIL
-            /*static bool first = true;
-            if (first) {
-                printf("IMU_MPU9250: accum gyro %f %f %f\n", _accum.gyro.x, _accum.gyro.y, _accum.gyro.z);
-                if (_accum.gyro.x > 2.5f || _accum.gyro.y > 2.5f || _accum.gyro.x < -2.5f || _accum.gyro.y < -2.5f) {
-                    first = false;
-                }
-                //printf("IMU_MPU9250: plant accel %f %f %f\n", UDP_HIL::getInstance().getPlantAccel().x, UDP_HIL::getInstance().getPlantAccel().y, UDP_HIL::getInstance().getPlantAccel().z);
-            }*/
-            //printf("IMU_MPU9250: accum gyro %f %f %f\n", _accum.gyro.x, _accum.gyro.y, _accum.gyro.z);
-            //printf("IMU_MPU9250: plant gyro %f %f %f\n", UDP_HIL::getInstance().getPlantGyro().x, UDP_HIL::getInstance().getPlantGyro().y, UDP_HIL::getInstance().getPlantGyro().z);
-            if (UDP_HIL::getInstance().getUsePlantModel()) {
-                _notify_new_gyro_raw_sample(_gyro_instance, UDP_HIL::getInstance().getPlantGyro());
-            } else {
-                _notify_new_gyro_raw_sample(_gyro_instance, _accum.gyro);
-            }
-            #else
             _notify_new_gyro_raw_sample(_gyro_instance, _accum.gyro);
-            #endif
             _accum.gyro.zero();
         }
     }
@@ -881,43 +776,14 @@ bool AP_InertialSensor_Invensense::_accumulate_sensor_rate_sampling(uint8_t *sam
     if (ret) {
         float temp = (static_cast<float>(tsum)/n_samples)*temp_sensitivity + temp_zero;
         _temp_filtered = _temp_filter.apply(temp);
-        #if defined(MPU9250_SocketMode) || defined(MPU9250_SocketModePrint)
-        memcpy(buffer, samples, MPU9250_RCV_SIZE-1);
-        buffer[MPU9250_BUFFER_SIZE-4] = (send_micros >> 24) & 0xFF;
-        buffer[MPU9250_BUFFER_SIZE-3] = (send_micros >> 16) & 0xFF;
-        buffer[MPU9250_BUFFER_SIZE-2] = (send_micros >> 8) & 0xFF;
-        buffer[MPU9250_BUFFER_SIZE-1] = send_micros & 0xFF;
-        memset(&response_addr, 0, sizeof(response_addr));
-        response_addr.sin_family = AF_INET;
-        response_addr.sin_addr = client_addr.sin_addr;
-        response_addr.sin_port = htons(MPU9250_RESPONSE_PORT);
-        ssize_t sent_len = sendto(MPU9250_udp_socket, &buffer, MPU9250_BUFFER_SIZE, 0,
-                                (struct sockaddr *)&response_addr, addr_len);
-        if (sent_len < 0) {
-            perror("Fehler beim Senden der Antwort");
-        } 
-        #if defined(MPU9250_SocketModePrint)
-        else {
-            printf("Antwort gesendet: Seq=%u an %s:%d\n",
-                seq_num, inet_ntoa(response_addr.sin_addr), MPU9250_RESPONSE_PORT);
-
-        }
-        #endif
-        #endif
+        
     }
     
-    MPU9250_TimeOperation_STOP();
     return ret;
 }
 
 void AP_InertialSensor_Invensense::_read_fifo()
 {
-    //clock_gettime(CLOCK_MONOTONIC, &MPU9250_TimeOperation_tsp);
-    //MPU9250_TimeOperation_difference = (int64_t)(MPU9250_TimeOperation_tsp.tv_sec - MPU9250_TimeOperation_ts.tv_sec) * (int64_t)1000000000UL + (int64_t)(MPU9250_TimeOperation_tsp.tv_nsec - MPU9250_TimeOperation_ts.tv_nsec);
-    //printf("Duration of timed operation: %lli\n", MPU9250_TimeOperation_difference);
-    //memcpy(&MPU9250_TimeOperation_ts, &MPU9250_TimeOperation_tsp, sizeof(timespec));
-    
-    //MPU9250_TimeOperation_START();
     uint8_t n_samples;
     uint16_t bytes_read;
     uint8_t *rx = _fifo_buffer;

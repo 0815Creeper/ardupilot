@@ -1,14 +1,24 @@
+#include <AP_HAL_Linux/Experiments.h>
+
+#ifdef UDP_HIL_ENABLED
+
 #include <unistd.h>
 #include <AP_HAL/AP_HAL.h>
 #include <AP_Math/AP_Math.h>
 
 #include "UDP_HIL.h"
 
+
+#if defined(TIMING_EXPERIMENT_UDP_HIL_RECVFROM_DURATION_SYSTEM) || defined(TIMING_EXPERIMENT_UDP_HIL_RECVFROM_DURATION_PROCESS) || defined(TIMING_EXPERIMENT_UDP_HIL_RECVFROM_DURATION_THREAD) 
 #include <time.h>
 struct timespec UDP_HIL_TimeOperation_ts;
 struct timespec UDP_HIL_TimeOperation_tsp;
+#endif
+#ifdef TIMING_EXPERIMENT_UDP_HIL_TIMER_TICK_CALL_PRECISION
+#include <time.h>
 struct timespec UDP_HIL_tick_nanos;
 struct timespec UDP_HIL_prev_tick_nanos;
+#endif
 
 UDP_HIL& UDP_HIL::getInstance() {
     static UDP_HIL instance;
@@ -21,7 +31,6 @@ UDP_HIL::UDP_HIL() {
     getValidGPSstate =&UDP_HIL::getOutGPSstate;
     getValidBaro =&UDP_HIL::getOutBaro;
     init_socket();
-    plant_model.init();
 }
 
 void UDP_HIL::init_socket() {
@@ -94,11 +103,11 @@ void UDP_HIL::getOutBaro(float* p, float* t) {
 
 void UDP_HIL::getInIMUbuff(uint8_t* buff) {
     std::lock_guard<std::mutex> lock(in_mutex_);
-    memcpy(buff, in_data_.IMU_buff, IMU_BUFF_LEN);
+    memcpy(buff, in_data_.IMU_buff, MPU_SAMPLE_SIZE*MPU_FIFO_BUFFER_LEN);
 }
 void UDP_HIL::getOutIMUbuff(uint8_t* buff) {
     std::lock_guard<std::mutex> lock(out_mutex_);
-    memcpy(buff, out_data_.IMU_buff, IMU_BUFF_LEN);
+    memcpy(buff, out_data_.IMU_buff, MPU_SAMPLE_SIZE*MPU_FIFO_BUFFER_LEN);
 }
 
 void UDP_HIL::getInMAGbuff(Vector3f* buff) {
@@ -114,6 +123,7 @@ GPSStruct UDP_HIL::getOutGPSstate() {
     std::lock_guard<std::mutex> lock(out_mutex_);
     return out_data_.GPSstate;
 }
+
 GPSStruct UDP_HIL::getInGPSstate() {
     std::lock_guard<std::mutex> lock(in_mutex_);
     return in_data_.GPSstate;
@@ -127,7 +137,9 @@ void UDP_HIL::setOutBaro(float p, float t) {
 
 void UDP_HIL::setOutIMUbuff(uint8_t* buff, uint8_t n_samples) {
     std::lock_guard<std::mutex> lock(out_mutex_);
-    memcpy(out_data_.IMU_buff, buff, n_samples*IMU_BUFF_LEN/8);
+    uint16_t n = n_samples*MPU_SAMPLE_SIZE;
+    memcpy(out_data_.IMU_buff, buff, n);
+    memset(((uint8_t*)out_data_.IMU_buff) + n, 0, MPU_SAMPLE_SIZE*MPU_FIFO_BUFFER_LEN-n);
 }
 
 void UDP_HIL::setOutMAGbuff(Vector3f* buff) {
@@ -156,7 +168,6 @@ void UDP_HIL::setOutMotor(uint8_t ch, uint16_t pwm) {
             out_data_.motorPWM3 = pwm;
             break;
     }
-    plant_model.setMotor(ch, pwm);
 }
 
 void UDP_HIL::inDataSwitchOver() {
@@ -167,61 +178,53 @@ void UDP_HIL::inDataSwitchOver() {
     getValidIMUbuff = &UDP_HIL::getInIMUbuff;
     getValidMAGbuff = &UDP_HIL::getInMAGbuff;
 }
-/*
-void UDP_HIL::inDataSwitchBack() {
-    printf("UDP_HIL_SWITCH_BACK!!!\n");
-    getValidIMUbuff =&UDP_HIL::getOutIMUbuff;
-    getValidMAGbuff =&UDP_HIL::getOutMAGbuff;
-    getValidGPSstate =&UDP_HIL::getOutGPSstate;
-    getValidBaro =&UDP_HIL::getOutBaro;
-}
-
-void UDP_HIL::getPlantIMUbuff(uint16_t* buff, int16_t t2, uint8_t num_samples) {
-    plant_model.getIMUsamples(buff, t2, num_samples);
-}
-*/
-
-Vector3f UDP_HIL::getPlantAccel() {
-    return plant_model.getAccel();
-}
-Vector3f UDP_HIL::getPlantGyro() {
-    return plant_model.getGyro();
-}
-bool UDP_HIL::getUsePlantModel() {
-    return !plant_model.on_gnd;
-}
 
 //#include <unistd.h>     //getpid()
 //#include <pthread.h>    //pthread_self()
 
 void UDP_HIL::_timer_tick() {
+    #ifdef TIMING_EXPERIMENT_UDP_HIL_TIMER_TICK_CALL_PRECISION
+    clock_gettime(CLOCK_MONOTONIC, &UDP_HIL_tick_nanos);
+    uint64_t dt = (uint64_t)(UDP_HIL_tick_nanos.tv_sec - UDP_HIL_prev_tick_nanos.tv_sec) * (uint64_t)1000000000UL + (uint64_t)(UDP_HIL_tick_nanos.tv_nsec - UDP_HIL_prev_tick_nanos.tv_nsec);
+    UDP_HIL_prev_tick_nanos = UDP_HIL_tick_nanos;
+    TIMING_EXPERIMENT_UDP_HIL_OUTPUT(dt);
+    #endif
     
-    //clock_gettime(CLOCK_MONOTONIC, &UDP_HIL_TimeOperation_ts);
     if(!socket_inited){
         printf("udp_hil_tick_but_socket_not_rdy\n");
         init_socket();
     }
     
-    clock_gettime(CLOCK_MONOTONIC, &UDP_HIL_tick_nanos);
-    uint64_t dt = (uint64_t)(UDP_HIL_tick_nanos.tv_sec - UDP_HIL_prev_tick_nanos.tv_sec) * (uint64_t)1000000000UL + (uint64_t)(UDP_HIL_tick_nanos.tv_nsec - UDP_HIL_prev_tick_nanos.tv_nsec);
-    UDP_HIL_prev_tick_nanos = UDP_HIL_tick_nanos;
-    if (dt > 3e6) {
-        printf("Plant_model_update dt in UDP_HIL too large: %fms; limiting to 3 ms\n", dt/1.0e6);
-        dt = 3e6;
-    }
-    plant_model.update(dt*1.0e-9);
-    //printf("%i\n", sizeof(GPSStruct));
     //printf("PID: %d, Thread-ID: %lu, udp_hil_socket: %d\n", getpid(), pthread_self(), udp_hil_socket);
+        
     struct sockaddr_in client_addr, response_addr;
     socklen_t addr_len = sizeof(client_addr);
     struct DataStruct buffer;
-    //printf("trying-recv: size %i bytes: %i\n", sizeof(buffer), sizeof(in_data_.Baro_pressure));
     if (udp_hil_socket < 0) {
         printf("Socket ist ungültig, kann nicht verwenden.\n");
         while(1);
     }
+
+    #ifdef  TIMING_EXPERIMENT_UDP_HIL_RECVFROM_DURATION_SYSTEM
+    clock_gettime(CLOCK_MONOTONIC, &UDP_HIL_TimeOperation_ts);
+    #endif
+    #ifdef  TIMING_EXPERIMENT_UDP_HIL_RECVFROM_DURATION_PROCESS
+    clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &UDP_HIL_TimeOperation_ts);
+    #endif
+    #ifdef  TIMING_EXPERIMENT_UDP_HIL_RECVFROM_DURATION_PROCESS
+    clock_gettime(CLOCK_THREAD_CPUTIME_ID, &UDP_HIL_TimeOperation_ts);
+    #endif
     ssize_t recv_len = recvfrom(udp_hil_socket, &buffer, sizeof(buffer), 0,
                                 (struct sockaddr *)&client_addr, &addr_len);
+    #ifdef  TIMING_EXPERIMENT_UDP_HIL_RECVFROM_DURATION_SYSTEM
+    clock_gettime(CLOCK_MONOTONIC, &UDP_HIL_TimeOperation_tsp);
+    #endif
+    #ifdef  TIMING_EXPERIMENT_UDP_HIL_RECVFROM_DURATION_PROCESS
+    clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &UDP_HIL_TimeOperation_tsp);
+    #endif
+    #ifdef  TIMING_EXPERIMENT_UDP_HIL_RECVFROM_DURATION_PROCESS
+    clock_gettime(CLOCK_THREAD_CPUTIME_ID, &UDP_HIL_TimeOperation_tsp);
+    #endif
     if (recv_len == -1){
         if (switchedOver&&AP_HAL::micros()-last_debug_print>1000) {
             last_debug_print=AP_HAL::micros();
@@ -237,43 +240,57 @@ void UDP_HIL::_timer_tick() {
             return;
         }
     } else if (recv_len == sizeof(buffer)) {
-        //if(getSeq(buffer)<3)
-            //printf("got seq %i\n", getSeq(buffer));
         if(!((getSeq(in_data_) == 255 && getSeq(buffer) == 1) || getSeq(buffer) == getSeq(in_data_) + 1 || getSeq(buffer) == 0)){
-            printf("FEHLER SEQ NUM FOLGE\n");
             printf("FEHLER SEQ NUM FOLGE: lseq:%i seq:%i \n", getSeq(in_data_), getSeq(buffer));
-            printf("FEHLER SEQ NUM FOLGE\n");
-            while(1);
+            exit(1);
         }
-        //last_valid_udp_packet = AP_HAL::micros();
-        //setInData((uint8_t*)&buffer);
         setInData(&buffer);
         if (!switchedOver && getSeq(in_data_) > 0)
             inDataSwitchOver();
+
         response_addr.sin_family = AF_INET;
         response_addr.sin_addr = client_addr.sin_addr;
         response_addr.sin_port = htons(UDP_HIL_RESPONSE_PORT);
         buffer = getOutData();
         buffer.seq_num = getInSeq() + 1;
+        
+        #ifdef TIMING_EXPERIMENT_UDP_HIL_SENDTO_DURATION_SYSTEM
+        clock_gettime(CLOCK_MONOTONIC, &UDP_HIL_TimeOperation_ts);
+        #endif
+        #ifdef TIMING_EXPERIMENT_UDP_HIL_SENDTO_DURATION_PROCESS
+        clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &UDP_HIL_TimeOperation_ts);
+        #endif
+        #ifdef TIMING_EXPERIMENT_UDP_HIL_SENDTO_DURATION_THREAD
+        clock_gettime(CLOCK_THREAD_CPUTIME_ID, &UDP_HIL_TimeOperation_ts);
+        #endif
+
         ssize_t sent_len = sendto(udp_hil_socket, &buffer, sizeof(buffer), 0,
                                 (struct sockaddr *)&response_addr, addr_len);
+
+        #ifdef TIMING_EXPERIMENT_UDP_HIL_SENDTO_DURATION_SYSTEM
+        clock_gettime(CLOCK_MONOTONIC, &UDP_HIL_TimeOperation_tsp);
+        #endif
+        #ifdef TIMING_EXPERIMENT_UDP_HIL_SENDTO_DURATION_PROCESS
+        clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &UDP_HIL_TimeOperation_tsp);
+        #endif
+        #ifdef TIMING_EXPERIMENT_UDP_HIL_SENDTO_DURATION_THREAD
+        clock_gettime(CLOCK_THREAD_CPUTIME_ID, &UDP_HIL_TimeOperation_tsp);
+        #endif
+
         if (sent_len < 0) {
             perror("Fehler beim Senden der Antwort");
         }
-    //clock_gettime(CLOCK_MONOTONIC, &UDP_HIL_TimeOperation_tsp);
-    //UDP_HIL_TimeOperation_difference = (int64_t)(UDP_HIL_TimeOperation_tsp.tv_sec - UDP_HIL_TimeOperation_ts.tv_sec) * (int64_t)1000000000UL + (int64_t)(UDP_HIL_TimeOperation_tsp.tv_nsec - UDP_HIL_TimeOperation_ts.tv_nsec);
-    //printf("Duration of timed operation: %lli\n", UDP_HIL_TimeOperation_difference);
-    //memcpy(&UDP_HIL_TimeOperation_ts, &UDP_HIL_TimeOperation_tsp, sizeof(timespec));
-    
+
+        #if defined(TIMING_EXPERIMENT_UDP_HIL_SENDTO_DURATION_SYSTEM) || defined(TIMING_EXPERIMENT_UDP_HIL_SENDTO_DURATION_PROCESS) || defined(TIMING_EXPERIMENT_UDP_HIL_SENDTO_DURATION_THREAD) || defined(TIMING_EXPERIMENT_UDP_HIL_RECVFROM_DURATION_SYSTEM) || defined(TIMING_EXPERIMENT_UDP_HIL_RECVFROM_DURATION_PROCESS) || defined(TIMING_EXPERIMENT_UDP_HIL_RECVFROM_DURATION_THREAD)
+        int64_t UDP_HIL_TimeOperation_difference = (int64_t)(UDP_HIL_TimeOperation_tsp.tv_sec - UDP_HIL_TimeOperation_ts.tv_sec) * (int64_t)1000000000UL + (int64_t)(UDP_HIL_TimeOperation_tsp.tv_nsec - UDP_HIL_TimeOperation_ts.tv_nsec);
+        TIMING_EXPERIMENT_UDP_HIL_OUTPUT(UDP_HIL_TimeOperation_difference);
+        #endif    
     } else {
-        printf("FEHLER RCV_LEN\n");
         printf("FEHLER RCV_LEN: sizeof(buffer):%i recv_len:%i \n", sizeof(buffer), recv_len);
-        printf("FEHLER RCV_LEN\n");
-        while(1);
+        exit(1);
     }
     while(recvfrom(udp_hil_socket, &buffer, sizeof(buffer), 0, (struct sockaddr *)&client_addr, &addr_len) != -1)
         printf("UDP_HIL skipping packet\n");
-
-    //if (AP_HAL::micros()<8000000)
-    //    printf("UDP_HIL_tick: %u\n", AP_HAL::micros());
 }
+
+#endif // UDP_HIL_ENABLED
