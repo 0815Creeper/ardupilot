@@ -105,4 +105,9 @@ private:
     bool socket_inited = false;
 
     uint32_t last_debug_print = 0;
+
+
+    #ifdef UDP_HIL_RESET_AFTER_MILLIS
+    uint32_t last_valid_packet ;
+    #endif
 };

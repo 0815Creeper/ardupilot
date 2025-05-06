@@ -94,6 +94,7 @@ void UDP_HIL::getInBaro(float* p, float* t) {
     std::lock_guard<std::mutex> lock(in_mutex_);
     *p = in_data_.Baro_pressure;
     *t = in_data_.Baro_temprature;
+    printf("Baro: %f\n", in_data_.Baro_pressure-out_data_.Baro_pressure);
 }
 void UDP_HIL::getOutBaro(float* p, float* t) {
     std::lock_guard<std::mutex> lock(out_mutex_);
@@ -189,7 +190,23 @@ void UDP_HIL::_timer_tick() {
     UDP_HIL_prev_tick_nanos = UDP_HIL_tick_nanos;
     TIMING_EXPERIMENT_UDP_HIL_OUTPUT(dt);
     #endif
-    
+    #ifdef UDP_HIL_RESET_AFTER_MILLIS
+    if(last_valid_packet !=0 && AP_HAL::millis()-last_valid_packet > UDP_HIL_RESET_AFTER_MILLIS){
+        printf("UDP_HIL: reset after %i ms\n", UDP_HIL_RESET_AFTER_MILLIS);
+        last_valid_packet = 0;
+        close(udp_hil_socket);
+        udp_hil_socket = -1;
+        socket_inited = false;
+        getValidIMUbuff =&UDP_HIL::getOutIMUbuff;
+        getValidMAGbuff =&UDP_HIL::getOutMAGbuff;
+        getValidGPSstate =&UDP_HIL::getOutGPSstate;
+        getValidBaro =&UDP_HIL::getOutBaro;
+        switchedOver = false;
+        std::lock_guard<std::mutex> lock(in_mutex_);
+        memset(&in_data_, 0, sizeof(struct DataStruct));
+        init_socket();
+    }
+    #endif
     if(!socket_inited){
         printf("udp_hil_tick_but_socket_not_rdy\n");
         init_socket();
@@ -205,13 +222,13 @@ void UDP_HIL::_timer_tick() {
         while(1);
     }
 
-    #ifdef  TIMING_EXPERIMENT_UDP_HIL_RECVFROM_DURATION_SYSTEM
+    #if defined(TIMING_EXPERIMENT_UDP_HIL_RECVFROM_DURATION_SYSTEM) || defined(TIMING_EXPERIMENT_UDP_HIL_PINGPONG_DURATION_SYSTEM)
     clock_gettime(CLOCK_MONOTONIC, &UDP_HIL_TimeOperation_ts);
     #endif
-    #ifdef  TIMING_EXPERIMENT_UDP_HIL_RECVFROM_DURATION_PROCESS
+    #if defined(TIMING_EXPERIMENT_UDP_HIL_RECVFROM_DURATION_PROCESS) || defined(TIMING_EXPERIMENT_UDP_HIL_PINGPONG_DURATION_PROCESS)
     clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &UDP_HIL_TimeOperation_ts);
     #endif
-    #ifdef  TIMING_EXPERIMENT_UDP_HIL_RECVFROM_DURATION_PROCESS
+    #if defined(TIMING_EXPERIMENT_UDP_HIL_RECVFROM_DURATION_PROCESS) || defined(TIMING_EXPERIMENT_UDP_HIL_PINGPONG_DURATION_THREAD)
     clock_gettime(CLOCK_THREAD_CPUTIME_ID, &UDP_HIL_TimeOperation_ts);
     #endif
     ssize_t recv_len = recvfrom(udp_hil_socket, &buffer, sizeof(buffer), 0,
@@ -226,10 +243,12 @@ void UDP_HIL::_timer_tick() {
     clock_gettime(CLOCK_THREAD_CPUTIME_ID, &UDP_HIL_TimeOperation_tsp);
     #endif
     if (recv_len == -1){
+        //printf("UDP_HIL: recvfrom failed, errno: %i; %i\n", errno, AP_HAL::micros());
+        /*
         if (switchedOver&&AP_HAL::micros()-last_debug_print>1000) {
             last_debug_print=AP_HAL::micros();
             printf("ONE UDP_HIL timer_tick_skipped at %i\n", AP_HAL::micros());
-        }
+        }*/
         //TODO not good but for testing
         if (errno == EAGAIN || errno == EWOULDBLOCK) { //|| AP_HAL::micros()<10000000UL
             // Keine Daten empfangen, einfach weiter machen
@@ -240,13 +259,17 @@ void UDP_HIL::_timer_tick() {
             return;
         }
     } else if (recv_len == sizeof(buffer)) {
+        //printf("UDP_HIL: seq_num: %i\n", getSeq(buffer));
         if(!((getSeq(in_data_) == 255 && getSeq(buffer) == 1) || getSeq(buffer) == getSeq(in_data_) + 1 || getSeq(buffer) == 0)){
             printf("FEHLER SEQ NUM FOLGE: lseq:%i seq:%i \n", getSeq(in_data_), getSeq(buffer));
             exit(1);
         }
+        last_valid_packet = AP_HAL::millis();
         setInData(&buffer);
         if (!switchedOver && getSeq(in_data_) > 0)
             inDataSwitchOver();
+        else if (!switchedOver)
+            printf("UDP_HIL: INITAL_PACKET SEQ 0\n");
 
         response_addr.sin_family = AF_INET;
         response_addr.sin_addr = client_addr.sin_addr;
@@ -267,13 +290,13 @@ void UDP_HIL::_timer_tick() {
         ssize_t sent_len = sendto(udp_hil_socket, &buffer, sizeof(buffer), 0,
                                 (struct sockaddr *)&response_addr, addr_len);
 
-        #ifdef TIMING_EXPERIMENT_UDP_HIL_SENDTO_DURATION_SYSTEM
+        #if defined(TIMING_EXPERIMENT_UDP_HIL_SENDTO_DURATION_SYSTEM) || defined(TIMING_EXPERIMENT_UDP_HIL_PINGPONG_DURATION_SYSTEM)
         clock_gettime(CLOCK_MONOTONIC, &UDP_HIL_TimeOperation_tsp);
         #endif
-        #ifdef TIMING_EXPERIMENT_UDP_HIL_SENDTO_DURATION_PROCESS
+        #if defined(TIMING_EXPERIMENT_UDP_HIL_SENDTO_DURATION_PROCESS) || defined(TIMING_EXPERIMENT_UDP_HIL_PINGPONG_DURATION_PROCESS)
         clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &UDP_HIL_TimeOperation_tsp);
         #endif
-        #ifdef TIMING_EXPERIMENT_UDP_HIL_SENDTO_DURATION_THREAD
+        #if defined(TIMING_EXPERIMENT_UDP_HIL_SENDTO_DURATION_THREAD) || defined(TIMING_EXPERIMENT_UDP_HIL_PINGPONG_DURATION_THREAD)
         clock_gettime(CLOCK_THREAD_CPUTIME_ID, &UDP_HIL_TimeOperation_tsp);
         #endif
 
