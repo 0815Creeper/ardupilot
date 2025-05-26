@@ -544,7 +544,7 @@ bool AP_InertialSensor_Invensense::_data_ready()
 void AP_InertialSensor_Invensense::_poll_data()
 {
     #ifdef TIMING_EXPERIMENT_MPU9250_POLLDATA_CALL_PRECISION
-    clock_gettime(CLOCK_MONOTONIC, &MPU9250_CallPrecision_nanos);
+    clock_gettime(CLOCK_MONOTONIC_RAW, &MPU9250_CallPrecision_nanos);
     uint64_t MPU9250_CallPrecision_difference = (int64_t)(MPU9250_CallPrecision_nanos.tv_sec - MPU9250_CallPrecision_prev_nanos.tv_sec) * (int64_t)1000000000UL + (int64_t)(MPU9250_CallPrecision_nanos.tv_nsec - MPU9250_CallPrecision_prev_nanos.tv_nsec);
     MPU9250_CallPrecision_prev_nanos = MPU9250_CallPrecision_nanos;
     TIMING_EXPERIMENT_MPU9250_OUTPUT(MPU9250_CallPrecision_difference);
@@ -556,7 +556,7 @@ void AP_InertialSensor_Invensense::_poll_data()
     clock_gettime(CLOCK_THREAD_CPUTIME_ID, &MPU9250_TimeOperation_ts);
     #endif
     #if defined(TIMING_EXPERIMENT_MPU9250_POLLDATA_DURATION_SYSTEM)
-    clock_gettime(CLOCK_MONOTONIC, &MPU9250_TimeOperation_ts);
+    clock_gettime(CLOCK_MONOTONIC_RAW, &MPU9250_TimeOperation_ts);
     #endif
 
     _read_fifo();
@@ -572,7 +572,7 @@ void AP_InertialSensor_Invensense::_poll_data()
     clock_gettime(CLOCK_THREAD_CPUTIME_ID, &MPU9250_TimeOperation_tsp);
     #endif  
     #ifdef TIMING_EXPERIMENT_MPU9250_POLLDATA_DURATION_SYSTEM
-    clock_gettime(CLOCK_MONOTONIC, &MPU9250_TimeOperation_tsp);
+    clock_gettime(CLOCK_MONOTONIC_RAW, &MPU9250_TimeOperation_tsp);
     #endif
     #if defined(TIMING_EXPERIMENT_MPU9250_POLLDATA_DURATION_SYSTEM) || defined(TIMING_EXPERIMENT_MPU9250_POLLDATA_DURATION_PROCESS) || defined(TIMING_EXPERIMENT_MPU9250_POLLDATA_DURATION_THREAD)
     uint64_t MPU9250_TimeOperation_difference = (int64_t)(MPU9250_TimeOperation_tsp.tv_sec - MPU9250_TimeOperation_ts.tv_sec) * (int64_t)1000000000UL + (int64_t)(MPU9250_TimeOperation_tsp.tv_nsec - MPU9250_TimeOperation_ts.tv_nsec);
@@ -690,21 +690,31 @@ bool AP_InertialSensor_Invensense::_accumulate_sensor_rate_sampling(uint8_t *sam
     //printf("pointer address: %p\n", ((void*)UDP_HIL::getInstance().getValidIMUbuff));
     (UDP_HIL::getInstance().*UDP_HIL::getInstance().getValidIMUbuff)(buffer);
     UDP_HIL::getInstance().setOutIMUbuff(samples, n_samples);
-    n_samples = 1;
+        
+    //n_samples = 1;
+    //uint8_t* buffer = samples;
     #endif
     for (uint8_t i = 0; i < n_samples; i++) {
         #if defined(UDP_HIL_MPU9250)
+        
         uint8_t buff_or = 0;
         for(int j=0; j<MPU_SAMPLE_SIZE; j++) {
             buff_or |= buffer[i*MPU_SAMPLE_SIZE+j];
         }
+        if (!buff_or) {
+            n_samples = i;
+            if(UDP_HIL::getInstance().getInSeq() != 0)
+                printf("one invalid imu_udp_hil_sample at index %i \n", i);
+            break;
+        }
         //const uint8_t *data = buff_or ? (buffer + MPU_SAMPLE_SIZE * i):(samples + MPU_SAMPLE_SIZE * i);
         const uint8_t *data = (buffer + MPU_SAMPLE_SIZE * i);
-        if (!buff_or && UDP_HIL::getInstance().getInSeq() != 0) {
-            printf("one invalid imu_udp_hil_sample at index %i \n", i);
-        }
+        //if (!buff_or && UDP_HIL::getInstance().getInSeq() != 0) {
+        //    printf("one invalid imu_udp_hil_sample at index %i \n", i);
+        //}
+        
         #else
-        //const uint8_t *data = samples + MPU_SAMPLE_SIZE * i;
+        const uint8_t *data = samples + MPU_SAMPLE_SIZE * i;
         #endif
         // use temperature to detect FIFO corruption
         int16_t t2 = int16_val(data, 3);
@@ -728,11 +738,7 @@ bool AP_InertialSensor_Invensense::_accumulate_sensor_rate_sampling(uint8_t *sam
             Vector3f a(int16_val(data, 1),
                        int16_val(data, 0),
                        -int16_val(data, 2));
-            static unsigned long print_timer = AP_HAL::millis();
-            if (AP_HAL::millis() - print_timer > 50) {
-                print_timer = AP_HAL::millis();
-                printf("accel: %8d %8d %8d\n", int16_val(data, 0), int16_val(data, 1), int16_val(data, 2));
-            }
+            
             //printf("accel: %8d %8d %8d\n", int16_val(data, 0), int16_val(data, 1), int16_val(data, 2));
             //g: 0 0 2080 default
             //0: 2080 0 0 lying on left side
@@ -783,6 +789,11 @@ bool AP_InertialSensor_Invensense::_accumulate_sensor_rate_sampling(uint8_t *sam
         //gyro_offset.y = 0.0001f * int16_val(data, 5) + 0.9999f * gyro_offset.y;
         //gyro_offset.z = 0.0001f * int16_val(data, 6) + 0.9999f * gyro_offset.z;
         //printf("gyro offset: %8f %8f %8f\n", gyro_offset.x, gyro_offset.y, gyro_offset.z);
+        /*static unsigned long print_timer = AP_HAL::millis();
+        if (AP_HAL::millis() - print_timer > 50) {
+            print_timer = AP_HAL::millis();
+            printf("accel: %8d %8d %8d gyro: %8d %8d %8d\n", int16_val(data, 0), int16_val(data, 1), int16_val(data, 2), int16_val(data, 4), int16_val(data, 5), int16_val(data, 6));
+        }*/
         // zero offset: -28 26 14
         //rates: 16.4 LSB/(deg/s)
         // Accel scale 16g (2048 LSB/g)

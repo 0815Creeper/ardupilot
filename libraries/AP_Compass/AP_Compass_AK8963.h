@@ -13,6 +13,7 @@
 #include "AP_Compass.h"
 #include "AP_Compass_Backend.h"
 
+
 class AuxiliaryBus;
 class AuxiliaryBusSlave;
 class AP_InertialSensor;

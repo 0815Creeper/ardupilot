@@ -29,10 +29,16 @@
 #include "RTCM3_Parser.h"
 #include <stdio.h>
 
-//#define GPS_UDP_HIL
+#include "AP_HAL_Linux/Experiments.h"
 
-#ifdef GPS_UDP_HIL
+#ifdef UDP_HIL_UBLOX
 #include "AP_HAL_Linux/UDP_HIL.h"
+#endif
+
+#ifdef TIMING_EXPERIMENT_UBLOX_PARSE_GPS_CALL_PRECISION
+#include <time.h>
+struct timespec UBLOX_tick_nanos;
+struct timespec UBLOX_prev_tick_nanos;
 #endif
 
 #if CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_LINUX_NAVIO || \
@@ -999,6 +1005,12 @@ int8_t AP_GPS_UBLOX::find_active_config_index(ConfigKey key) const
 bool
 AP_GPS_UBLOX::_parse_gps(void)
 {
+    #ifdef TIMING_EXPERIMENT_UBLOX_PARSE_GPS_CALL_PRECISION
+    clock_gettime(CLOCK_MONOTONIC_RAW, &UBLOX_tick_nanos);
+    uint64_t dt = (uint64_t)(UBLOX_tick_nanos.tv_sec - UBLOX_prev_tick_nanos.tv_sec) * (uint64_t)1000000000UL + (uint64_t)(UBLOX_tick_nanos.tv_nsec - UBLOX_prev_tick_nanos.tv_nsec);
+    UBLOX_prev_tick_nanos = UBLOX_tick_nanos;
+    TIMING_EXPERIMENT_UBLOX_OUTPUT(dt);
+    #endif
     if (_class == CLASS_ACK) {
 
         if(_msg_id == MSG_ACK_ACK) {
@@ -1430,7 +1442,7 @@ AP_GPS_UBLOX::_parse_gps(void)
             _unconfigured_messages |= CONFIG_RATE_POSLLH;
             break;
         }
-    #ifdef GPS_UDP_HIL
+    #ifdef UDP_HIL_UBLOX
         //due to c++ standard: It is not allowed to jump (e.g. via goto, switch-case, etc.) into a scope that has a variable with a non-trivial initializer.
         {
             GPSStruct hilFrameIn = (UDP_HIL::getInstance().*UDP_HIL::getInstance().getValidGPSstate)();
@@ -1487,7 +1499,7 @@ AP_GPS_UBLOX::_parse_gps(void)
             break;
         }
 
-    #ifdef GPS_UDP_HIL
+    #ifdef UDP_HIL_UBLOX
         //due to c++ standard: It is not allowed to jump (e.g. via goto, switch-case, etc.) into a scope that has a variable with a non-trivial initializer.
         {
             GPSStruct hilFrameIn = (UDP_HIL::getInstance().*UDP_HIL::getInstance().getValidGPSstate)();
@@ -1552,7 +1564,7 @@ AP_GPS_UBLOX::_parse_gps(void)
     case MSG_DOP:
         Debug("MSG_DOP");
         noReceivedHdop = false;
-        #ifdef GPS_UDP_HIL
+        #ifdef UDP_HIL_UBLOX
         //due to c++ standard: It is not allowed to jump (e.g. via goto, switch-case, etc.) into a scope that has a variable with a non-trivial initializer.
         {
             GPSStruct hilFrameIn = (UDP_HIL::getInstance().*UDP_HIL::getInstance().getValidGPSstate)();
@@ -1585,7 +1597,7 @@ AP_GPS_UBLOX::_parse_gps(void)
             state.time_week = _buffer.solution.week;
             break;
         }
-    #ifdef GPS_UDP_HIL
+    #ifdef UDP_HIL_UBLOX
         //due to c++ standard: It is not allowed to jump (e.g. via goto, switch-case, etc.) into a scope that has a variable with a non-trivial initializer.
         {
             GPSStruct hilFrameIn = (UDP_HIL::getInstance().*UDP_HIL::getInstance().getValidGPSstate)();
@@ -1719,7 +1731,7 @@ AP_GPS_UBLOX::_parse_gps(void)
 
     case MSG_PVT:
         Debug("MSG_PVT");
-        #ifdef GPS_UDP_HIL
+        #ifdef UDP_HIL_UBLOX
         //due to c++ standard: It is not allowed to jump (e.g. via goto, switch-case, etc.) into a scope that has a variable with a non-trivial initializer.
         {
             GPSStruct hilFrameIn = (UDP_HIL::getInstance().*UDP_HIL::getInstance().getValidGPSstate)();
@@ -1886,7 +1898,7 @@ AP_GPS_UBLOX::_parse_gps(void)
         break;
     case MSG_TIMEGPS:
         Debug("MSG_TIMEGPS");
-        #ifdef GPS_UDP_HIL
+        #ifdef UDP_HIL_UBLOX
         //due to c++ standard: It is not allowed to jump (e.g. via goto, switch-case, etc.) into a scope that has a variable with a non-trivial initializer.
         {
             GPSStruct hilFrameIn = (UDP_HIL::getInstance().*UDP_HIL::getInstance().getValidGPSstate)();
@@ -1908,7 +1920,7 @@ AP_GPS_UBLOX::_parse_gps(void)
         break;
     case MSG_VELNED:
         Debug("MSG_VELNED");
-        #ifdef GPS_UDP_HIL
+        #ifdef UDP_HIL_UBLOX
         //due to c++ standard: It is not allowed to jump (e.g. via goto, switch-case, etc.) into a scope that has a variable with a non-trivial initializer.
         {
             GPSStruct hilFrameIn = (UDP_HIL::getInstance().*UDP_HIL::getInstance().getValidGPSstate)();
@@ -1956,7 +1968,7 @@ AP_GPS_UBLOX::_parse_gps(void)
     case MSG_NAV_SVINFO:
         {
         Debug("MSG_NAV_SVINFO\n");
-        #ifdef GPS_UDP_HIL
+        #ifdef UDP_HIL_UBLOX
         //due to c++ standard: It is not allowed to jump (e.g. via goto, switch-case, etc.) into a scope that has a variable with a non-trivial initializer.
         {
             GPSStruct hilFrameIn = (UDP_HIL::getInstance().*UDP_HIL::getInstance().getValidGPSstate)();

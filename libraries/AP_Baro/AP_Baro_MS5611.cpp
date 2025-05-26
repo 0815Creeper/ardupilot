@@ -417,7 +417,7 @@ void AP_Baro_MS56XX::update()
 void AP_Baro_MS56XX::_calculate_5611()
 {
     #ifdef TIMING_EXPERIMENT_MS5611_CONVERSION_CALL_PRECISION
-    clock_gettime(CLOCK_MONOTONIC, &MS5611_CallPrecision_nanos);
+    clock_gettime(CLOCK_MONOTONIC_RAW, &MS5611_CallPrecision_nanos);
     uint64_t MS5611_CallPrecision_difference = (int64_t)(MS5611_CallPrecision_nanos.tv_sec - MS5611_CallPrecision_prev_nanos.tv_sec) * (int64_t)1000000000UL + (int64_t)(MS5611_CallPrecision_nanos.tv_nsec - MS5611_CallPrecision_prev_nanos.tv_nsec);
     MS5611_CallPrecision_prev_nanos = MS5611_CallPrecision_nanos;
     TIMING_EXPERIMENT_MS5611_OUTPUT(MS5611_CallPrecision_difference);
@@ -430,7 +430,7 @@ void AP_Baro_MS56XX::_calculate_5611()
     clock_gettime(CLOCK_THREAD_CPUTIME_ID, &MS5611_TimeOperation_ts);
     #endif
     #ifdef TIMING_EXPERIMENT_MS5611_CONVERSION_DURATION_SYSTEM
-    clock_gettime(CLOCK_MONOTONIC, &MS5611_TimeOperation_ts);
+    clock_gettime(CLOCK_MONOTONIC_RAW, &MS5611_TimeOperation_ts);
     #endif
 
     float dT;
@@ -493,7 +493,7 @@ void AP_Baro_MS56XX::_calculate_5611()
     clock_gettime(CLOCK_THREAD_CPUTIME_ID, &MS5611_TimeOperation_tsp);
     #endif
     #ifdef TIMING_EXPERIMENT_MS5611_CONVERSION_DURATION_SYSTEM
-    clock_gettime(CLOCK_MONOTONIC, &MS5611_TimeOperation_tsp);
+    clock_gettime(CLOCK_MONOTONIC_RAW, &MS5611_TimeOperation_tsp);
     #endif
     #if defined(TIMING_EXPERIMENT_MS5611_CONVERSION_DURATION_SYSTEM) || defined(TIMING_EXPERIMENT_MS5611_CONVERSION_DURATION_PROCESS) || defined(TIMING_EXPERIMENT_MS5611_CONVERSION_DURATION_THREAD)
     int64_t MS5611_TimeOperation_difference = (int64_t)(MS5611_TimeOperation_tsp.tv_sec - MS5611_TimeOperation_ts.tv_sec) * (int64_t)1000000000UL + (int64_t)(MS5611_TimeOperation_tsp.tv_nsec - MS5611_TimeOperation_ts.tv_nsec);

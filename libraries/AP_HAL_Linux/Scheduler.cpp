@@ -129,6 +129,7 @@ void Scheduler::init()
         #endif
     };
 
+
     _main_ctx = pthread_self();
 
     init_realtime();
@@ -173,7 +174,7 @@ void Scheduler::_debug_stack()
                 _io_thread.get_stack_usage(),
                 _rcin_thread.get_stack_usage(),
                 _uart_thread.get_stack_usage()
-                #ifdef UDP_HIL_PWM
+                #ifdef UDP_HIL_ENABLED
                 ,_udp_hil_thread.get_stack_usage()
                 #endif
                 );

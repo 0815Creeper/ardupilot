@@ -1,5 +1,6 @@
 #pragma once
 
+#include "AP_HAL_Linux/Experiments.h"
 #include <stdint.h>
 #include <stdio.h>
 #include <mutex>
@@ -106,8 +107,13 @@ private:
 
     uint32_t last_debug_print = 0;
 
+    void setOutGPSTOW(uint32_t t);
 
     #ifdef UDP_HIL_RESET_AFTER_MILLIS
     uint32_t last_valid_packet ;
+    #endif
+
+    #ifdef TIMING_EXPERIMENT_UDP_HIL_GPIO_OUTPUT_26_ENABLED
+    volatile uint32_t* gpio_map = nullptr;
     #endif
 };

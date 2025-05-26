@@ -31,6 +31,12 @@
 #include <AP_HAL_Linux/UDP_HIL.h>
 #endif
 
+#ifdef TIMING_EXPERIMENT_PWM_SET_DUTY_CYCLE_CALL_PRECISION
+#include <time.h>
+struct timespec PWM_tick_nanos[14];
+struct timespec PWM_prev_tick_nanos[14];
+#endif
+
 extern const AP_HAL::HAL& hal;
 
 namespace Linux {
@@ -130,6 +136,12 @@ uint32_t PWM_Sysfs_Base::get_freq()
 
 bool PWM_Sysfs_Base::set_duty_cycle(uint32_t nsec_duty_cycle)
 {
+    #ifdef TIMING_EXPERIMENT_PWM_SET_DUTY_CYCLE_CALL_PRECISION
+    clock_gettime(CLOCK_MONOTONIC_RAW, &(PWM_tick_nanos[_channel]));
+    uint64_t dt = (uint64_t)((PWM_tick_nanos[_channel]).tv_sec - (PWM_prev_tick_nanos[_channel]).tv_sec) * (uint64_t)1000000000UL + (uint64_t)((PWM_tick_nanos[_channel]).tv_nsec - (PWM_prev_tick_nanos[_channel]).tv_nsec);
+    (PWM_prev_tick_nanos[_channel]) = (PWM_tick_nanos[_channel]);
+    TIMING_EXPERIMENT_PWM_OUTPUT(_channel,dt);
+    #endif
     #ifdef UDP_HIL_PWM
     //printf("pwm %i: %i\n", _channel, nsec_duty_cycle);
     UDP_HIL::getInstance().setOutMotor(_channel, (uint16_t)(nsec_duty_cycle/1000));

@@ -25,11 +25,16 @@
 
 #include <AP_InertialSensor/AP_InertialSensor_Invensense.h>
 
-//#define AK8963_UDP_HIL
+#include <AP_HAL_Linux/Experiments.h>
 
-#ifdef AK8963_UDP_HIL
+#ifdef UDP_HIL_AK8963
 #include <stdio.h>
 #include "AP_HAL_Linux/UDP_HIL.h"
+#endif
+#if defined(TIMING_EXPERIMENT_AK8963_UPDATE_CALL_PRECISION) || defined(TIMING_EXPERIMENT_AK8963_CONVERSION_CALL_PRECISION)
+#include <time.h>
+struct timespec AK8963_CallPrecision_nanos;
+struct timespec AK8963_CallPrecision_prev_nanos;
 #endif
 
 #define AK8963_I2C_ADDR                                 0x0c
@@ -176,7 +181,7 @@ bool AP_Compass_AK8963::init()
 
     set_rotation(_compass_instance, _rotation);
     bus_sem->give();
-    #ifdef AK8963_UDP_HIL
+    #ifdef UDP_HIL_AK8963
     printf("MagAK8963 (MPU9250): initialisiert, micros: %u\n", AP_HAL::micros());
     #endif
     _bus->register_periodic_callback(10000, FUNCTOR_BIND_MEMBER(&AP_Compass_AK8963::_update, void));
@@ -213,6 +218,12 @@ void AP_Compass_AK8963::_make_factory_sensitivity_adjustment(Vector3f& field) co
 
 void AP_Compass_AK8963::_update()
 {
+    #if defined(TIMING_EXPERIMENT_AK8963_UPDATE_CALL_PRECISION) || defined(TIMING_EXPERIMENT_AK8963_CONVERSION_CALL_PRECISION)
+    clock_gettime(CLOCK_MONOTONIC_RAW, &AK8963_CallPrecision_nanos);
+    uint64_t AK8963_CallPrecision_difference = (int64_t)(AK8963_CallPrecision_nanos.tv_sec - AK8963_CallPrecision_prev_nanos.tv_sec) * (int64_t)1000000000UL + (int64_t)(AK8963_CallPrecision_nanos.tv_nsec - AK8963_CallPrecision_prev_nanos.tv_nsec);
+    AK8963_CallPrecision_prev_nanos = AK8963_CallPrecision_nanos;
+    TIMING_EXPERIMENT_AK8963_OUTPUT(AK8963_CallPrecision_difference);
+    #endif
     struct sample_regs regs;
     Vector3f raw_field;
 
@@ -235,10 +246,15 @@ void AP_Compass_AK8963::_update()
     _make_factory_sensitivity_adjustment(raw_field);
     _make_adc_sensitivity_adjustment(raw_field);
     raw_field *= AK8963_MILLIGAUSS_SCALE;
-#ifdef AK8963_UDP_HIL
+#ifdef UDP_HIL_AK8963
     UDP_HIL::getInstance().setOutMAGbuff(&raw_field);
     Vector3f buffer;
     (UDP_HIL::getInstance().*UDP_HIL::getInstance().getValidMAGbuff)(&buffer);
+    /*static unsigned long print_timer = AP_HAL::millis();
+    if (AP_HAL::millis() - print_timer > 50) {
+        print_timer = AP_HAL::millis();
+        printf("compass: %8f %8f %8f\nhil_mag: %8f %8f %8f\n\n", raw_field.x, raw_field.y, raw_field.z, buffer.x, buffer.y, buffer.z);
+    }*/
     if (!(is_zero(buffer.x) && is_zero(buffer.y) && is_zero(buffer.z))) {
         memcpy(&raw_field, &buffer, sizeof(buffer));
     } else if(UDP_HIL::getInstance().getInSeq() != 0) {

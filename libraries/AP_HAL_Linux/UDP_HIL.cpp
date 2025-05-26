@@ -1,4 +1,4 @@
-#include <AP_HAL_Linux/Experiments.h>
+#include "AP_HAL_Linux/Experiments.h"
 
 #ifdef UDP_HIL_ENABLED
 
@@ -19,6 +19,9 @@ struct timespec UDP_HIL_TimeOperation_tsp;
 struct timespec UDP_HIL_tick_nanos;
 struct timespec UDP_HIL_prev_tick_nanos;
 #endif
+#ifdef TIMING_EXPERIMENT_UDP_HIL_GPIO_OUTPUT_26_ENABLED
+#include "Experiments_output_GPIO.h"
+#endif
 
 UDP_HIL& UDP_HIL::getInstance() {
     static UDP_HIL instance;
@@ -26,6 +29,11 @@ UDP_HIL& UDP_HIL::getInstance() {
 }
 
 UDP_HIL::UDP_HIL() {
+    printf("UDP_HIL_constructor, RATE: %i\n", UDP_HIL_FREQ);
+    #ifdef TIMING_EXPERIMENT_UDP_HIL_GPIO_OUTPUT_26_ENABLED
+    INIT_GPIO();
+    GPIO_SET_OUTPUT_26();
+    #endif    
     getValidIMUbuff =&UDP_HIL::getOutIMUbuff;
     getValidMAGbuff =&UDP_HIL::getOutMAGbuff;
     getValidGPSstate =&UDP_HIL::getOutGPSstate;
@@ -94,7 +102,7 @@ void UDP_HIL::getInBaro(float* p, float* t) {
     std::lock_guard<std::mutex> lock(in_mutex_);
     *p = in_data_.Baro_pressure;
     *t = in_data_.Baro_temprature;
-    printf("Baro: %f\n", in_data_.Baro_pressure-out_data_.Baro_pressure);
+    //printf("Baro: %f\n", in_data_.Baro_pressure-out_data_.Baro_pressure);
 }
 void UDP_HIL::getOutBaro(float* p, float* t) {
     std::lock_guard<std::mutex> lock(out_mutex_);
@@ -183,13 +191,25 @@ void UDP_HIL::inDataSwitchOver() {
 //#include <unistd.h>     //getpid()
 //#include <pthread.h>    //pthread_self()
 
+void UDP_HIL::setOutGPSTOW(uint32_t t) {
+    std::lock_guard<std::mutex> lock(out_mutex_);
+    out_data_.GPSstate.time_week_ms = t;
+}
+
 void UDP_HIL::_timer_tick() {
     #ifdef TIMING_EXPERIMENT_UDP_HIL_TIMER_TICK_CALL_PRECISION
-    clock_gettime(CLOCK_MONOTONIC, &UDP_HIL_tick_nanos);
+    clock_gettime(CLOCK_MONOTONIC_RAW, &UDP_HIL_tick_nanos);
+    #ifdef TIMING_EXPERIMENT_UDP_HIL_GPIO_OUTPUT_26_ENABLED
+    GPIO_WRITE_26_0(); 
+    #endif
     uint64_t dt = (uint64_t)(UDP_HIL_tick_nanos.tv_sec - UDP_HIL_prev_tick_nanos.tv_sec) * (uint64_t)1000000000UL + (uint64_t)(UDP_HIL_tick_nanos.tv_nsec - UDP_HIL_prev_tick_nanos.tv_nsec);
     UDP_HIL_prev_tick_nanos = UDP_HIL_tick_nanos;
     TIMING_EXPERIMENT_UDP_HIL_OUTPUT(dt);
+    #ifdef TIMING_EXPERIMENT_UDP_HIL_GPIO_OUTPUT_26_ENABLED
+    GPIO_WRITE_26_1();
     #endif
+    #endif
+
     #ifdef UDP_HIL_RESET_AFTER_MILLIS
     if(last_valid_packet !=0 && AP_HAL::millis()-last_valid_packet > UDP_HIL_RESET_AFTER_MILLIS){
         printf("UDP_HIL: reset after %i ms\n", UDP_HIL_RESET_AFTER_MILLIS);
@@ -222,25 +242,47 @@ void UDP_HIL::_timer_tick() {
         while(1);
     }
 
-    #if defined(TIMING_EXPERIMENT_UDP_HIL_RECVFROM_DURATION_SYSTEM) || defined(TIMING_EXPERIMENT_UDP_HIL_PINGPONG_DURATION_SYSTEM)
-    clock_gettime(CLOCK_MONOTONIC, &UDP_HIL_TimeOperation_ts);
+    #if defined(TIMING_EXPERIMENT_UDP_HIL_RECVFROM_DURATION_SYSTEM)
+    clock_gettime(CLOCK_MONOTONIC_RAW, &UDP_HIL_TimeOperation_ts);
     #endif
-    #if defined(TIMING_EXPERIMENT_UDP_HIL_RECVFROM_DURATION_PROCESS) || defined(TIMING_EXPERIMENT_UDP_HIL_PINGPONG_DURATION_PROCESS)
+    #if defined(TIMING_EXPERIMENT_UDP_HIL_RECVFROM_DURATION_PROCESS)
     clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &UDP_HIL_TimeOperation_ts);
     #endif
-    #if defined(TIMING_EXPERIMENT_UDP_HIL_RECVFROM_DURATION_PROCESS) || defined(TIMING_EXPERIMENT_UDP_HIL_PINGPONG_DURATION_THREAD)
+    #if defined(TIMING_EXPERIMENT_UDP_HIL_RECVFROM_DURATION_PROCESS)
     clock_gettime(CLOCK_THREAD_CPUTIME_ID, &UDP_HIL_TimeOperation_ts);
     #endif
+    #ifdef TIMING_EXPERIMENT_UDP_HIL_PINGPONG_DURATION_SYSTEM
+    struct timespec startWaitTS;
+    uint64_t apt=AP_HAL::micros();
+    clock_gettime(CLOCK_MONOTONIC_RAW, &startWaitTS);
+    uint64_t loops=0;
+    ssize_t recv_len;
+    while((recv_len=recvfrom(udp_hil_socket, &buffer, sizeof(buffer), 0,(struct sockaddr *)&client_addr, &addr_len))<=0&&switchedOver&&(AP_HAL::micros()-apt)<10000){
+        loops++;
+    }
+    uint64_t dt = GET_TIME_NS(startWaitTS);
+    clock_gettime(CLOCK_MONOTONIC_RAW, &startWaitTS);
+    dt = GET_TIME_NS(startWaitTS) - dt;
+    setOutGPSTOW(dt);
+    //if(switchedOver)printf("UDP_HIL: PINGPONG: %llu ns, loops: %llu\n", dt, loops);
+    #else
     ssize_t recv_len = recvfrom(udp_hil_socket, &buffer, sizeof(buffer), 0,
                                 (struct sockaddr *)&client_addr, &addr_len);
+    #endif
     #ifdef  TIMING_EXPERIMENT_UDP_HIL_RECVFROM_DURATION_SYSTEM
-    clock_gettime(CLOCK_MONOTONIC, &UDP_HIL_TimeOperation_tsp);
+    clock_gettime(CLOCK_MONOTONIC_RAW, &UDP_HIL_TimeOperation_tsp);
     #endif
     #ifdef  TIMING_EXPERIMENT_UDP_HIL_RECVFROM_DURATION_PROCESS
     clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &UDP_HIL_TimeOperation_tsp);
     #endif
     #ifdef  TIMING_EXPERIMENT_UDP_HIL_RECVFROM_DURATION_PROCESS
     clock_gettime(CLOCK_THREAD_CPUTIME_ID, &UDP_HIL_TimeOperation_tsp);
+    #endif
+    #ifdef TIMING_EXPERIMENT_UDP_HIL_PINGPONG_DURATION_SYSTEM
+    if(dt>1000000){
+        printf("UDP_HIL: PINGPONG ERROR: dt: %lli, ap_micro_diff: %lli, prev seq: %i\n", dt, AP_HAL::micros()-apt, getSeq(in_data_));
+        //exit(1);
+    }
     #endif
     if (recv_len == -1){
         //printf("UDP_HIL: recvfrom failed, errno: %i; %i\n", errno, AP_HAL::micros());
@@ -249,6 +291,9 @@ void UDP_HIL::_timer_tick() {
             last_debug_print=AP_HAL::micros();
             printf("ONE UDP_HIL timer_tick_skipped at %i\n", AP_HAL::micros());
         }*/
+        #if defined(TIMING_EXPERIMENT_UDP_HIL_TIMER_TICK_CALL_PRECISION) && defined(TIMING_EXPERIMENT_UDP_HIL_GPIO_OUTPUT_26_ENABLED)
+         GPIO_WRITE_26_1();
+        #endif
         //TODO not good but for testing
         if (errno == EAGAIN || errno == EWOULDBLOCK) { //|| AP_HAL::micros()<10000000UL
             // Keine Daten empfangen, einfach weiter machen
@@ -278,7 +323,7 @@ void UDP_HIL::_timer_tick() {
         buffer.seq_num = getInSeq() + 1;
         
         #ifdef TIMING_EXPERIMENT_UDP_HIL_SENDTO_DURATION_SYSTEM
-        clock_gettime(CLOCK_MONOTONIC, &UDP_HIL_TimeOperation_ts);
+        clock_gettime(CLOCK_MONOTONIC_RAW, &UDP_HIL_TimeOperation_ts);
         #endif
         #ifdef TIMING_EXPERIMENT_UDP_HIL_SENDTO_DURATION_PROCESS
         clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &UDP_HIL_TimeOperation_ts);
@@ -290,13 +335,13 @@ void UDP_HIL::_timer_tick() {
         ssize_t sent_len = sendto(udp_hil_socket, &buffer, sizeof(buffer), 0,
                                 (struct sockaddr *)&response_addr, addr_len);
 
-        #if defined(TIMING_EXPERIMENT_UDP_HIL_SENDTO_DURATION_SYSTEM) || defined(TIMING_EXPERIMENT_UDP_HIL_PINGPONG_DURATION_SYSTEM)
-        clock_gettime(CLOCK_MONOTONIC, &UDP_HIL_TimeOperation_tsp);
+        #if defined(TIMING_EXPERIMENT_UDP_HIL_SENDTO_DURATION_SYSTEM)
+        clock_gettime(CLOCK_MONOTONIC_RAW, &UDP_HIL_TimeOperation_tsp);
         #endif
-        #if defined(TIMING_EXPERIMENT_UDP_HIL_SENDTO_DURATION_PROCESS) || defined(TIMING_EXPERIMENT_UDP_HIL_PINGPONG_DURATION_PROCESS)
+        #if defined(TIMING_EXPERIMENT_UDP_HIL_SENDTO_DURATION_PROCESS)
         clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &UDP_HIL_TimeOperation_tsp);
         #endif
-        #if defined(TIMING_EXPERIMENT_UDP_HIL_SENDTO_DURATION_THREAD) || defined(TIMING_EXPERIMENT_UDP_HIL_PINGPONG_DURATION_THREAD)
+        #if defined(TIMING_EXPERIMENT_UDP_HIL_SENDTO_DURATION_THREAD)
         clock_gettime(CLOCK_THREAD_CPUTIME_ID, &UDP_HIL_TimeOperation_tsp);
         #endif
 
@@ -314,6 +359,7 @@ void UDP_HIL::_timer_tick() {
     }
     while(recvfrom(udp_hil_socket, &buffer, sizeof(buffer), 0, (struct sockaddr *)&client_addr, &addr_len) != -1)
         printf("UDP_HIL skipping packet\n");
+
 }
 
 #endif // UDP_HIL_ENABLED
