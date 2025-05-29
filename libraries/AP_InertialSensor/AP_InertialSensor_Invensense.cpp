@@ -35,6 +35,19 @@
 #include "AP_HAL_Linux/UDP_HIL.h"
 #endif
 
+#if defined(TIMING_EXPERIMENT_MPU9250_UDP_DECENTRALIZED_SEND_TO) || defined(TIMING_EXPERIMENT_MPU9250_UDP_DECENTRALIZED_RECV) || defined(TIMING_EXPERIMENT_MPU9250_UDP_DECENTRALIZED_RECV_FROM)
+//#include <stdlib.h>
+//#include <string.h>
+//#include <unistd.h>
+#include <fcntl.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+
+int mpu9250_udp_socket = -1;
+struct sockaddr_in mpu9250_udp_sendto_addr;
+struct sockaddr_in mpu9250_udp_recv_addr;
+#endif
+
 #if defined(TIMING_EXPERIMENT_MPU9250_POLLDATA_DURATION_SYSTEM) || defined(TIMING_EXPERIMENT_MPU9250_POLLDATA_DURATION_PROCESS) || defined(TIMING_EXPERIMENT_MPU9250_POLLDATA_DURATION_THREAD)
 #include <time.h>
 struct timespec MPU9250_TimeOperation_ts;
@@ -452,6 +465,49 @@ void AP_InertialSensor_Invensense::start()
     if (_fifo_buffer == nullptr) {
         AP_HAL::panic("Invensense: Unable to allocate FIFO buffer");
     }
+    #if defined(TIMING_EXPERIMENT_MPU9250_UDP_DECENTRALIZED_SEND_TO) || defined(TIMING_EXPERIMENT_MPU9250_UDP_DECENTRALIZED_RECV_FROM)
+    mpu9250_udp_socket = socket(AF_INET, SOCK_DGRAM, 0);
+    if (mpu9250_udp_socket < 0) {
+        perror("Socket creation failed");
+    }
+    // Nicht-blockierenden Modus aktivieren
+    int mpu9250_udp_socket_flags = fcntl(mpu9250_udp_socket, F_GETFL, 0);
+    if (mpu9250_udp_socket_flags == -1) {
+        perror("Fehler beim Abrufen der Socket-Flags");
+        printf("Fehler beim Abrufen der Socket-Flags\n");
+        while(1);
+    }
+    if (fcntl(mpu9250_udp_socket, F_SETFL, mpu9250_udp_socket_flags | O_NONBLOCK) == -1) {
+        perror("Fehler beim Setzen des non-blocking Modus");
+        printf("Fehler beim Setzen des non-blocking Modus\n");
+        while(1);
+    }
+
+    memset(&mpu9250_udp_sendto_addr, 0, sizeof(mpu9250_udp_sendto_addr));
+    mpu9250_udp_sendto_addr.sin_family = AF_INET;
+    mpu9250_udp_sendto_addr.sin_addr.s_addr = inet_addr(TIMING_EXPERIMENT_MPU9250_UDP_DECENTRALIZED_IP);
+    mpu9250_udp_sendto_addr.sin_port = htons(TIMING_EXPERIMENT_MPU9250_UDP_DECENTRALIZED_SEND_PORT);
+    
+    if (inet_pton(AF_INET, TIMING_EXPERIMENT_MPU9250_UDP_DECENTRALIZED_IP, &mpu9250_udp_sendto_addr.sin_addr) <= 0) {
+        perror("Invalid address/ Address not supported");
+        close(mpu9250_udp_socket);
+    }
+
+    memset(&mpu9250_udp_recv_addr, 0, sizeof(mpu9250_udp_recv_addr));
+    mpu9250_udp_recv_addr.sin_family = AF_INET;
+    mpu9250_udp_recv_addr.sin_addr.s_addr = INADDR_ANY;
+    mpu9250_udp_recv_addr.sin_port = htons(TIMING_EXPERIMENT_MPU9250_UDP_DECENTRALIZED_RECV_PORT);
+    if (bind(mpu9250_udp_socket, (struct sockaddr *)&mpu9250_udp_recv_addr, sizeof(mpu9250_udp_recv_addr)) < 0) {
+        perror("Bind failed");
+        close(mpu9250_udp_socket);
+        mpu9250_udp_socket = -1;
+        AP_HAL::panic("Socket Bind fehlgeschlagen");
+        while(1);
+    } else {
+        printf("MPU9250 UDP socket initialized (recv port %d)\n", TIMING_EXPERIMENT_MPU9250_UDP_DECENTRALIZED_RECV_PORT);
+    }
+    
+    #endif
 
     // start the timer process to read samples, using the fastest rate avilable
     _dev->register_periodic_callback(1000000UL / _gyro_backend_rate_hz, FUNCTOR_BIND_MEMBER(&AP_InertialSensor_Invensense::_poll_data, void));
@@ -685,6 +741,37 @@ bool AP_InertialSensor_Invensense::_accumulate_sensor_rate_sampling(uint8_t *sam
     const int32_t unscaled_clip_limit = _clip_limit / _accel_scale;
     bool clipped = false;
     bool ret = true;
+    #ifdef TIMING_EXPERIMENT_MPU9250_UDP_DECENTRALIZED_SEND_TO
+    ssize_t sent_len = sendto(mpu9250_udp_socket, &samples, MPU_SAMPLE_SIZE * MPU_FIFO_BUFFER_LEN, 0,
+                                (struct sockaddr *)&mpu9250_udp_sendto_addr, sizeof(mpu9250_udp_sendto_addr));
+    if (sent_len < 0) {
+        perror("Fehler beim Senden der MPU-Daten");
+    }
+    #endif
+    #ifdef TIMING_EXPERIMENT_MPU9250_UDP_DECENTRALIZED_RECV_FROM
+    uint8_t buffer[MPU_SAMPLE_SIZE * MPU_FIFO_BUFFER_LEN];
+
+    struct sockaddr_in mpu9250_udp_addr;
+    socklen_t mpu9250_udp_addr_len = sizeof(mpu9250_udp_addr);
+    ssize_t recv_len = recvfrom(mpu9250_udp_socket, buffer, MPU_SAMPLE_SIZE * MPU_FIFO_BUFFER_LEN, 0,
+                                (struct sockaddr *)&mpu9250_udp_addr, &mpu9250_udp_addr_len);
+    if (recv_len < 0) {
+        //printf("Fehler beim Empfangen der MPU-Daten, recv_len %d\n", recv_len);
+    }else if (recv_len != MPU_SAMPLE_SIZE * n_samples) {
+        printf("recv_len %zd != MPU_SAMPLE_SIZE * n_samples %d\n", recv_len, MPU_SAMPLE_SIZE * n_samples);
+        return false;
+    }
+    #endif
+    #ifdef TIMING_EXPERIMENT_MPU9250_UDP_DECENTRALIZED_RECV
+    uint8_t buffer[MPU_SAMPLE_SIZE * MPU_FIFO_BUFFER_LEN];
+    ssize_t recv_len = recv(mpu9250_udp_socket, buffer, MPU_SAMPLE_SIZE * MPU_FIFO_BUFFER_LEN, 0);
+    if (recv_len < 0) {
+        //printf("Fehler beim Empfangen der MPU-Daten, recv_len %d\n", recv_len);
+    }else if (recv_len != MPU_SAMPLE_SIZE * 8) {
+        printf("recv_len %zd != MPU_SAMPLE_SIZE * 8 %d\n", recv_len, MPU_SAMPLE_SIZE * 8);
+        return false;
+    }
+    #endif
     #if defined(UDP_HIL_MPU9250)
     uint8_t buffer[MPU_SAMPLE_SIZE * MPU_FIFO_BUFFER_LEN];
     //printf("pointer address: %p\n", ((void*)UDP_HIL::getInstance().getValidIMUbuff));

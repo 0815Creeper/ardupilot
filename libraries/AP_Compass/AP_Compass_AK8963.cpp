@@ -31,7 +31,7 @@
 #include <stdio.h>
 #include "AP_HAL_Linux/UDP_HIL.h"
 #endif
-#if defined(TIMING_EXPERIMENT_AK8963_UPDATE_CALL_PRECISION) || defined(TIMING_EXPERIMENT_AK8963_CONVERSION_CALL_PRECISION)
+#ifdef TIMING_EXPERIMENT_AK8963_UPDATE_CALL_PRECISION
 #include <time.h>
 struct timespec AK8963_CallPrecision_nanos;
 struct timespec AK8963_CallPrecision_prev_nanos;
@@ -218,7 +218,7 @@ void AP_Compass_AK8963::_make_factory_sensitivity_adjustment(Vector3f& field) co
 
 void AP_Compass_AK8963::_update()
 {
-    #if defined(TIMING_EXPERIMENT_AK8963_UPDATE_CALL_PRECISION) || defined(TIMING_EXPERIMENT_AK8963_CONVERSION_CALL_PRECISION)
+    #ifdef TIMING_EXPERIMENT_AK8963_UPDATE_CALL_PRECISION
     clock_gettime(CLOCK_MONOTONIC_RAW, &AK8963_CallPrecision_nanos);
     uint64_t AK8963_CallPrecision_difference = (int64_t)(AK8963_CallPrecision_nanos.tv_sec - AK8963_CallPrecision_prev_nanos.tv_sec) * (int64_t)1000000000UL + (int64_t)(AK8963_CallPrecision_nanos.tv_nsec - AK8963_CallPrecision_prev_nanos.tv_nsec);
     AK8963_CallPrecision_prev_nanos = AK8963_CallPrecision_nanos;
