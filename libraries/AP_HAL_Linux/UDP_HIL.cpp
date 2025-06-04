@@ -234,7 +234,7 @@ void UDP_HIL::_timer_tick() {
     
     //printf("PID: %d, Thread-ID: %lu, udp_hil_socket: %d\n", getpid(), pthread_self(), udp_hil_socket);
         
-    struct sockaddr_in client_addr, response_addr;
+    struct sockaddr_in client_addr;
     socklen_t addr_len = sizeof(client_addr);
     struct DataStruct buffer;
     if (udp_hil_socket < 0) {
@@ -307,18 +307,19 @@ void UDP_HIL::_timer_tick() {
         //printf("UDP_HIL: seq_num: %i\n", getSeq(buffer));
         if(!((getSeq(in_data_) == 255 && getSeq(buffer) == 1) || getSeq(buffer) == getSeq(in_data_) + 1 || getSeq(buffer) == 0)){
             printf("FEHLER SEQ NUM FOLGE: lseq:%i seq:%i \n", getSeq(in_data_), getSeq(buffer));
+            //todo: currently only works if commented out:
             exit(1);
         }
         last_valid_packet = AP_HAL::millis();
         setInData(&buffer);
         if (!switchedOver && getSeq(in_data_) > 0)
             inDataSwitchOver();
-        else if (!switchedOver)
+        else if (!switchedOver) {
             printf("UDP_HIL: INITAL_PACKET SEQ 0\n");
-
-        response_addr.sin_family = AF_INET;
-        response_addr.sin_addr = client_addr.sin_addr;
-        response_addr.sin_port = htons(UDP_HIL_RESPONSE_PORT);
+            response_addr.sin_family = AF_INET;
+            response_addr.sin_addr = client_addr.sin_addr;
+            response_addr.sin_port = htons(UDP_HIL_RESPONSE_PORT);
+        }
         buffer = getOutData();
         buffer.seq_num = getInSeq() + 1;
         
@@ -357,8 +358,10 @@ void UDP_HIL::_timer_tick() {
         printf("FEHLER RCV_LEN: sizeof(buffer):%i recv_len:%i \n", sizeof(buffer), recv_len);
         exit(1);
     }
-    while(recvfrom(udp_hil_socket, &buffer, sizeof(buffer), 0, (struct sockaddr *)&client_addr, &addr_len) != -1)
+    while(recvfrom(udp_hil_socket, &buffer, sizeof(buffer), 0, (struct sockaddr *)&client_addr, &addr_len) != -1){
         printf("UDP_HIL skipping packet\n");
+
+    }
 
 }
 

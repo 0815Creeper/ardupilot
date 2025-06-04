@@ -85,6 +85,7 @@ private:
     ~UDP_HIL() = default;
 
     void init_socket();
+    struct sockaddr_in response_addr;
 
     UDP_HIL(const UDP_HIL&) = delete;
     UDP_HIL& operator=(const UDP_HIL&) = delete;

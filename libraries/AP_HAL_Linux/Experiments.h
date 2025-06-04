@@ -3,21 +3,21 @@
 // configuration
 #define UDP_HIL_FREQ    1000 // frequency of udp_hil data exchange
 #define UDP_HIL_RESET_AFTER_MILLIS 10000 // reset after this many milliseconds
-#define TIMING_EXPERIMENT_MPU9250_UDP_DECENTRALIZED_RECV_PORT 13018
-#define TIMING_EXPERIMENT_MPU9250_UDP_DECENTRALIZED_SEND_PORT 13019
-#define TIMING_EXPERIMENT_MPU9250_UDP_DECENTRALIZED_IP "10.42.0.1"
+//#define TIMING_EXPERIMENT_MPU9250_UDP_DECENTRALIZED_RECV_PORT 13018
+//#define TIMING_EXPERIMENT_MPU9250_UDP_DECENTRALIZED_SEND_PORT 13019
+//#define TIMING_EXPERIMENT_MPU9250_UDP_DECENTRALIZED_IP "10.42.0.1"
 
 #define GET_TIME_NS(x) ((uint64_t)x.tv_sec * (uint64_t)1000000000UL + (uint64_t)x.tv_nsec)
 // end of configuration
 
 
 // toggle options
-//#define UDP_HIL_ENABLED // activates scheduler call to udp_hil
-//#define UDP_HIL_MS5611   // activates ms5611 (baro) data replacement from udp_hil
-//#define UDP_HIL_MPU9250  // activates mpu9250 (imu) data replacement from udp_hil
-//#define UDP_HIL_AK8963  // activates mpu9250 (mag) data replacement from udp_hil
-//#define UDP_HIL_UBLOX     // activates ublox (gps) data replacement from udp_hil
-//#define UDP_HIL_PWM       // activates pwm (motor) data grabbing to udp_hil
+#define UDP_HIL_ENABLED // activates scheduler call to udp_hil
+#define UDP_HIL_MS5611   // activates ms5611 (baro) data replacement from udp_hil
+#define UDP_HIL_MPU9250  // activates mpu9250 (imu) data replacement from udp_hil
+#define UDP_HIL_AK8963  // activates mpu9250 (mag) data replacement from udp_hil
+#define UDP_HIL_UBLOX     // activates ublox (gps) data replacement from udp_hil
+#define UDP_HIL_PWM       // activates pwm (motor) data grabbing to udp_hil
 
 //#define TIMING_EXPERIMENT_MPU9250_UDP_DECENTRALIZED_SEND_TO
 //#define TIMING_EXPERIMENT_MPU9250_UDP_DECENTRALIZED_RECV
