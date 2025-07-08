@@ -14,7 +14,7 @@
 struct timespec UDP_HIL_TimeOperation_ts;
 struct timespec UDP_HIL_TimeOperation_tsp;
 #endif
-#ifdef TIMING_EXPERIMENT_UDP_HIL_TIMER_TICK_CALL_PRECISION
+#if defined(TIMING_EXPERIMENT_UDP_HIL_TIMER_TICK_CALL_PRECISION) || defined(TIMING_EXPERIMENT_UDP_HIL_SENDTO_DONE_PRECISION)
 #include <time.h>
 struct timespec UDP_HIL_tick_nanos;
 struct timespec UDP_HIL_prev_tick_nanos;
@@ -30,6 +30,7 @@ UDP_HIL& UDP_HIL::getInstance() {
 
 UDP_HIL::UDP_HIL() {
     printf("UDP_HIL_constructor, RATE: %i\n", UDP_HIL_FREQ);
+    printf("UDP_HIL_Size_datastruct: %i\n", sizeof(DataStruct));
     #ifdef TIMING_EXPERIMENT_UDP_HIL_GPIO_OUTPUT_26_ENABLED
     INIT_GPIO();
     GPIO_SET_OUTPUT_26();
@@ -110,13 +111,13 @@ void UDP_HIL::getOutBaro(float* p, float* t) {
     *t = out_data_.Baro_temprature;
 }
 
-void UDP_HIL::getInIMUbuff(uint8_t* buff) {
+void UDP_HIL::getInIMUbuff(uint8_t* buff, uint8_t offset8) {
     std::lock_guard<std::mutex> lock(in_mutex_);
-    memcpy(buff, in_data_.IMU_buff, MPU_SAMPLE_SIZE*MPU_FIFO_BUFFER_LEN);
+    memcpy(buff, in_data_.IMU_buff + offset8 * MPU_SAMPLE_SIZE * MPU_FIFO_BUFFER_LEN, MPU_SAMPLE_SIZE * MPU_FIFO_BUFFER_LEN);
 }
-void UDP_HIL::getOutIMUbuff(uint8_t* buff) {
+void UDP_HIL::getOutIMUbuff(uint8_t* buff, uint8_t offset8) {
     std::lock_guard<std::mutex> lock(out_mutex_);
-    memcpy(buff, out_data_.IMU_buff, MPU_SAMPLE_SIZE*MPU_FIFO_BUFFER_LEN);
+    memcpy(buff, out_data_.IMU_buff + offset8 * MPU_SAMPLE_SIZE * MPU_FIFO_BUFFER_LEN, MPU_SAMPLE_SIZE * MPU_FIFO_BUFFER_LEN);
 }
 
 void UDP_HIL::getInMAGbuff(Vector3f* buff) {
@@ -144,11 +145,14 @@ void UDP_HIL::setOutBaro(float p, float t) {
     out_data_.Baro_temprature = t;
 }
 
-void UDP_HIL::setOutIMUbuff(uint8_t* buff, uint8_t n_samples) {
+void UDP_HIL::setOutIMUbuff(uint8_t* buff, uint8_t offset8, uint8_t n_samples) {
     std::lock_guard<std::mutex> lock(out_mutex_);
     uint16_t n = n_samples*MPU_SAMPLE_SIZE;
-    memcpy(out_data_.IMU_buff, buff, n);
-    memset(((uint8_t*)out_data_.IMU_buff) + n, 0, MPU_SAMPLE_SIZE*MPU_FIFO_BUFFER_LEN-n);
+    if (offset8 == 0) {
+        memset(out_data_.IMU_buff, 0, MPU_SAMPLE_SIZE * UDP_HIL_IMU_BUFFER_LEN);
+    }
+    memcpy(((uint8_t*)out_data_.IMU_buff) + offset8 * MPU_SAMPLE_SIZE * MPU_FIFO_BUFFER_LEN, buff, n);
+    memset(((uint8_t*)out_data_.IMU_buff) + offset8 * MPU_SAMPLE_SIZE * MPU_FIFO_BUFFER_LEN + n, 0, MPU_SAMPLE_SIZE*MPU_FIFO_BUFFER_LEN*((UDP_HIL_IMU_BUFFER_LEN/MPU_FIFO_BUFFER_LEN)-offset8) - n);
 }
 
 void UDP_HIL::setOutMAGbuff(Vector3f* buff) {
@@ -335,6 +339,13 @@ void UDP_HIL::_timer_tick() {
 
         ssize_t sent_len = sendto(udp_hil_socket, &buffer, sizeof(buffer), 0,
                                 (struct sockaddr *)&response_addr, addr_len);
+
+        #ifdef TIMING_EXPERIMENT_UDP_HIL_SENDTO_DONE_PRECISION
+        clock_gettime(CLOCK_MONOTONIC_RAW, &UDP_HIL_tick_nanos);
+        uint64_t dt = (uint64_t)(UDP_HIL_tick_nanos.tv_sec - UDP_HIL_prev_tick_nanos.tv_sec) * (uint64_t)1000000000UL + (uint64_t)(UDP_HIL_tick_nanos.tv_nsec - UDP_HIL_prev_tick_nanos.tv_nsec);
+        UDP_HIL_prev_tick_nanos = UDP_HIL_tick_nanos;
+        TIMING_EXPERIMENT_UDP_HIL_OUTPUT(dt);
+        #endif
 
         #if defined(TIMING_EXPERIMENT_UDP_HIL_SENDTO_DURATION_SYSTEM)
         clock_gettime(CLOCK_MONOTONIC_RAW, &UDP_HIL_TimeOperation_tsp);

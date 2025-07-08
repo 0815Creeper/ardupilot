@@ -32,7 +32,7 @@ extern const AP_HAL::HAL& hal;
 #define APM_LINUX_TIMER_PRIORITY        15
 #define APM_LINUX_UART_PRIORITY         14
 #ifdef UDP_HIL_ENABLED
-#define APM_LINUX_UDP_HIL_PRIORITY      14//try finally 11 (same as logging maybe?)
+#define APM_LINUX_UDP_HIL_PRIORITY      14
 #endif
 #define APM_LINUX_NET_PRIORITY          14
 #define APM_LINUX_RCIN_PRIORITY         13

@@ -39,6 +39,8 @@
 //#define TIMING_EXPERIMENT_UDP_HIL_SENDTO_DURATION_PROCESS
 //#define TIMING_EXPERIMENT_UDP_HIL_SENDTO_DURATION_THREAD
 
+//#define TIMING_EXPERIMENT_UDP_HIL_SENDTO_DONE_PRECISION
+
 //#define TIMING_EXPERIMENT_UDP_HIL_PINGPONG_DURATION_SYSTEM
 
 //#define TIMING_EXPERIMENT_MS5611_CONVERSION_CALL_PRECISION
@@ -57,6 +59,8 @@
 
 //#define TIMING_EXPERIMENT_UBLOX_PARSE_GPS_CALL_PRECISION
 
+//#define TIMING_EXPERIMENT_UBLOX_PARSE_GPS_CALL_MSG_PRECISION
+
 //#define TIMING_EXPERIMENT_PWM_SET_DUTY_CYCLE_CALL_PRECISION
 //end of Experiments
 
@@ -65,26 +69,30 @@
 // only one per class at a time !!!
 
 //#define TIMING_EXPERIMENT_UDP_HIL_GPIO_OUTPUT_26_ENABLED
-//#define TIMING_EXPERIMENT_UDP_HIL_OUTPUT(x) printf("UDP_HIL_TIMING_EXPERIMENT_OUTPUT: %lli\n", x)
+#define TIMING_EXPERIMENT_UDP_HIL_OUTPUT(x) printf("UDP_HIL_TIMING_EXPERIMENT_OUTPUT: %lli\n", x)
 //#define TIMING_EXPERIMENT_UDP_HIL_OUTPUT(x) do { FILE *file = fopen("/home/pi/experiment_udp_hil_output.txt", "a"); if (file) { fprintf(file, "%lli\n", x); fclose(file); } } while (0)
-//#define TIMING_EXPERIMENT_MS5611_OUTPUT(x) do { FILE *file = fopen("/run/testfiles/experiment_udp_hil_output.txt", "a"); if (file) { fprintf(file, "%lli\n", x); fclose(file); } } while (0)
+//#define TIMING_EXPERIMENT_UDP_HIL_OUTPUT(x) do { FILE *file = fopen("/run/testfiles/experiment_udp_hil_output.txt", "a"); if (file) { fprintf(file, "%lli\n", x); fclose(file); } } while (0)
 
 
-//#define TIMING_EXPERIMENT_MS5611_OUTPUT(x) printf("MS5611_TIMING_EXPERIMENT_OUTPUT: %lli\n", x)
+#define TIMING_EXPERIMENT_MS5611_OUTPUT(x) printf("MS5611_TIMING_EXPERIMENT_OUTPUT: %lli\n", x)
 //#define TIMING_EXPERIMENT_MS5611_OUTPUT(x) do { FILE *file = fopen("/home/pi/experiment_MS5611_output.txt", "a"); if (file) { fprintf(file, "%lli\n", x); fclose(file); } } while (0)
 //#define TIMING_EXPERIMENT_MS5611_OUTPUT(x) do { FILE *file = fopen("/run/testfiles/experiment_MS5611_output.txt", "a"); if (file) { fprintf(file, "%lli\n", x); fclose(file); } } while (0)
 
 
-//#define TIMING_EXPERIMENT_MPU9250_OUTPUT(x) printf("MPU9250_TIMING_EXPERIMENT_OUTPUT: %lli\n", x)
+#define TIMING_EXPERIMENT_MPU9250_OUTPUT(x) printf("MPU9250_TIMING_EXPERIMENT_OUTPUT: %lli\n", x)
 //#define TIMING_EXPERIMENT_MPU9250_OUTPUT(x) do { FILE *file = fopen("/home/pi/experiment_MPU9250_output.txt", "a"); if (file) { fprintf(file, "%lli\n", x); fclose(file); } } while (0)
 //#define TIMING_EXPERIMENT_MPU9250_OUTPUT(x) do { FILE *file = fopen("/run/testfiles/experiment_MPU9250_output.txt", "a"); if (file) { fprintf(file, "%lli\n", x); fclose(file); } } while (0)
 
 
-//#define TIMING_EXPERIMENT_AK8963_OUTPUT(x) printf("AK8963_TIMING_EXPERIMENT_OUTPUT: %lli\n", x)
+#define TIMING_EXPERIMENT_AK8963_OUTPUT(x) printf("AK8963_TIMING_EXPERIMENT_OUTPUT: %lli\n", x)
 //#define TIMING_EXPERIMENT_AK8963_OUTPUT(x) do { FILE *file = fopen("/home/pi/experiment_AK8963_output.txt", "a"); if (file) { fprintf(file, "%lli\n", x); fclose(file); } } while (0)
 //#define TIMING_EXPERIMENT_AK8963_OUTPUT(x) do { FILE *file = fopen("/run/testfiles/experiment_AK8963_output.txt", "a"); if (file) { fprintf(file, "%lli\n", x); fclose(file); } } while (0)
 
-//#define TIMING_EXPERIMENT_UBLOX_OUTPUT(x) printf("UBLOX_TIMING_EXPERIMENT_OUTPUT: %lli\n", x)
+#define TIMING_EXPERIMENT_UBLOX_OUTPUT(x) printf("UBLOX_TIMING_EXPERIMENT_OUTPUT: %lli\n", x)
+//#define TIMING_EXPERIMENT_UBLOX_OUTPUT(x) do { FILE *file = fopen("/home/pi/experiment_UBLOX_output.txt", "a"); if (file) { fprintf(file, "%lli\n", x); fclose(file); } } while (0)
+//#define TIMING_EXPERIMENT_UBLOX_OUTPUT(x) do { FILE *file = fopen("/run/testfiles/experiment_UBLOX_output.txt", "a"); if (file) { fprintf(file, "%lli\n", x); fclose(file); } } while (0)
+
+#define TIMING_EXPERIMENT_UBLOX_CALLPRECMSG_OUTPUT(x) printf("UBLOX_TIMING_EXPERIMENT_CALLPRECMSG_OUTPUT: %lli\n", x)
 //#define TIMING_EXPERIMENT_UBLOX_OUTPUT(x) do { FILE *file = fopen("/home/pi/experiment_UBLOX_output.txt", "a"); if (file) { fprintf(file, "%lli\n", x); fclose(file); } } while (0)
 //#define TIMING_EXPERIMENT_UBLOX_OUTPUT(x) do { FILE *file = fopen("/run/testfiles/experiment_UBLOX_output.txt", "a"); if (file) { fprintf(file, "%lli\n", x); fclose(file); } } while (0)
 

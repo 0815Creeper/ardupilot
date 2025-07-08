@@ -10,6 +10,8 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
 
+#define UDP_HIL_IMU_BUFFER_LEN 32
+
 #define SEND_SENSORDATA_BACK
 #define UDP_HIL_PORT 13017
 #define UDP_HIL_RESPONSE_PORT (UDP_HIL_PORT + 1000)
@@ -39,7 +41,7 @@ struct DataStruct {
     uint16_t motorPWM3;
     float Baro_pressure;
     float Baro_temprature;
-    uint16_t IMU_buff[MPU_SAMPLE_SIZE*MPU_FIFO_BUFFER_LEN/sizeof(uint16_t)];
+    uint16_t IMU_buff[MPU_SAMPLE_SIZE*UDP_HIL_IMU_BUFFER_LEN/sizeof(uint16_t)];
     Vector3f MAG_xyz;
     uint8_t seq_num;
     uint8_t gps_len;
@@ -54,18 +56,18 @@ public:
     bool getSwitchedOver() const { return switchedOver; }
 
     uint8_t getInSeq();
-    
-    void setOutIMUbuff(uint8_t* buff, uint8_t n_samples);
+
+    void setOutIMUbuff(uint8_t* buff, uint8_t offset8, uint8_t n_samples);
     void setOutMAGbuff(Vector3f* buff);
     void setOutBaro(float p, float t);
     void setOutGPSstate(GPSStruct* buff);
     void setOutMotor(uint8_t ch, uint16_t pwm);
     
-    void getInIMUbuff(uint8_t* buff);
+    void getInIMUbuff(uint8_t* buff, uint8_t offset8);
     void getInMAGbuff(Vector3f* buff);
     GPSStruct getInGPSstate();
     void getInBaro(float* p, float* t);
-    void getOutIMUbuff(uint8_t* buff);
+    void getOutIMUbuff(uint8_t* buff, uint8_t offset8);
     void getOutMAGbuff(Vector3f* buff);
     GPSStruct getOutGPSstate();
     void getOutBaro(float* p, float* t);
@@ -73,7 +75,7 @@ public:
     //todo switchover func for all getIn Funcs
 
     // points to getOutGPSstate initally until udp stream is available
-    void (UDP_HIL::*getValidIMUbuff)(uint8_t* buff);
+    void (UDP_HIL::*getValidIMUbuff)(uint8_t* buff, uint8_t offset8);
     void (UDP_HIL::*getValidMAGbuff)(Vector3f* buff);
     GPSStruct (UDP_HIL::*getValidGPSstate)();
     void (UDP_HIL::*getValidBaro)(float* p, float* t);

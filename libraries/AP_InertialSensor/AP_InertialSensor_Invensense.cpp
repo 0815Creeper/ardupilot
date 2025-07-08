@@ -33,6 +33,7 @@
 
 #ifdef UDP_HIL_MPU9250
 #include "AP_HAL_Linux/UDP_HIL.h"
+int mpu9250_fifo_loop_count = 0;
 #endif
 
 #if defined(TIMING_EXPERIMENT_MPU9250_UDP_DECENTRALIZED_SEND_TO) || defined(TIMING_EXPERIMENT_MPU9250_UDP_DECENTRALIZED_RECV) || defined(TIMING_EXPERIMENT_MPU9250_UDP_DECENTRALIZED_RECV_FROM)
@@ -775,8 +776,8 @@ bool AP_InertialSensor_Invensense::_accumulate_sensor_rate_sampling(uint8_t *sam
     #if defined(UDP_HIL_MPU9250)
     uint8_t buffer[MPU_SAMPLE_SIZE * MPU_FIFO_BUFFER_LEN];
     //printf("pointer address: %p\n", ((void*)UDP_HIL::getInstance().getValidIMUbuff));
-    (UDP_HIL::getInstance().*UDP_HIL::getInstance().getValidIMUbuff)(buffer);
-    UDP_HIL::getInstance().setOutIMUbuff(samples, n_samples);
+    (UDP_HIL::getInstance().*UDP_HIL::getInstance().getValidIMUbuff)(buffer, mpu9250_fifo_loop_count);
+    UDP_HIL::getInstance().setOutIMUbuff(samples, mpu9250_fifo_loop_count, n_samples);
         
     //n_samples = 1;
     //uint8_t* buffer = samples;
@@ -980,7 +981,7 @@ void AP_InertialSensor_Invensense::_read_fifo()
             n_samples = 24;
         }
     }
-    
+    mpu9250_fifo_loop_count = 0;
     while (n_samples > 0) {
         uint8_t n = MIN(n_samples, MPU_FIFO_BUFFER_LEN);
         if (!_dev->set_chip_select(true)) {
@@ -1018,10 +1019,11 @@ void AP_InertialSensor_Invensense::_read_fifo()
             }
         }
         n_samples -= n;
+        mpu9250_fifo_loop_count++;
     }
 
     if (need_reset) {
-        //debug("fifo reset n_samples %u", bytes_read/MPU_SAMPLE_SIZE);
+        debug("fifo reset due to running fuller n_samples %u", bytes_read/MPU_SAMPLE_SIZE);
         _fifo_reset(false);
     }
     
@@ -1159,6 +1161,7 @@ void AP_InertialSensor_Invensense::_set_filter_register(void)
     if (_fast_sampling) {
         // this gives us 8kHz sampling on gyros and 4kHz on accels
         config |= BITS_DLPF_CFG_256HZ_NOLPF2;
+        //config |= BITS_DLPF_CFG_188HZ;
     } else {
         // limit to 1kHz if not on SPI
         config |= BITS_DLPF_CFG_188HZ;

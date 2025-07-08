@@ -35,10 +35,15 @@
 #include "AP_HAL_Linux/UDP_HIL.h"
 #endif
 
-#ifdef TIMING_EXPERIMENT_UBLOX_PARSE_GPS_CALL_PRECISION
+#if defined(TIMING_EXPERIMENT_UBLOX_PARSE_GPS_CALL_PRECISION) 
 #include <time.h>
 struct timespec UBLOX_tick_nanos;
 struct timespec UBLOX_prev_tick_nanos;
+#endif
+#if defined(TIMING_EXPERIMENT_UBLOX_PARSE_GPS_CALL_MSG_PRECISION)
+#include <time.h>
+struct timespec UBLOX_MSG_tick_nanos;
+struct timespec UBLOX_MSG_prev_tick_nanos;
 #endif
 
 #if CONFIG_HAL_BOARD_SUBTYPE == HAL_BOARD_SUBTYPE_LINUX_NAVIO || \
@@ -1005,9 +1010,12 @@ int8_t AP_GPS_UBLOX::find_active_config_index(ConfigKey key) const
 bool
 AP_GPS_UBLOX::_parse_gps(void)
 {
+    #if defined(TIMING_EXPERIMENT_UBLOX_PARSE_GPS_CALL_PRECISION) || defined(TIMING_EXPERIMENT_UBLOX_PARSE_GPS_CALL_MSG_PRECISION)
+    uint64_t dt;
+    #endif
     #ifdef TIMING_EXPERIMENT_UBLOX_PARSE_GPS_CALL_PRECISION
     clock_gettime(CLOCK_MONOTONIC_RAW, &UBLOX_tick_nanos);
-    uint64_t dt = (uint64_t)(UBLOX_tick_nanos.tv_sec - UBLOX_prev_tick_nanos.tv_sec) * (uint64_t)1000000000UL + (uint64_t)(UBLOX_tick_nanos.tv_nsec - UBLOX_prev_tick_nanos.tv_nsec);
+    dt = (uint64_t)(UBLOX_tick_nanos.tv_sec - UBLOX_prev_tick_nanos.tv_sec) * (uint64_t)1000000000UL + (uint64_t)(UBLOX_tick_nanos.tv_nsec - UBLOX_prev_tick_nanos.tv_nsec);
     UBLOX_prev_tick_nanos = UBLOX_tick_nanos;
     TIMING_EXPERIMENT_UBLOX_OUTPUT(dt);
     #endif
@@ -1443,6 +1451,12 @@ AP_GPS_UBLOX::_parse_gps(void)
             break;
         }
     #ifdef UDP_HIL_UBLOX
+#ifdef TIMING_EXPERIMENT_UBLOX_PARSE_GPS_CALL_MSG_PRECISION
+    clock_gettime(CLOCK_MONOTONIC_RAW, &UBLOX_MSG_tick_nanos);
+    dt = (uint64_t)(UBLOX_MSG_tick_nanos.tv_sec - UBLOX_MSG_prev_tick_nanos.tv_sec) * (uint64_t)1000000000UL + (uint64_t)(UBLOX_MSG_tick_nanos.tv_nsec - UBLOX_MSG_prev_tick_nanos.tv_nsec);
+    UBLOX_MSG_prev_tick_nanos = UBLOX_MSG_tick_nanos;
+    TIMING_EXPERIMENT_UBLOX_CALLPRECMSG_OUTPUT(dt);
+    #endif
         //due to c++ standard: It is not allowed to jump (e.g. via goto, switch-case, etc.) into a scope that has a variable with a non-trivial initializer.
         {
             GPSStruct hilFrameIn = (UDP_HIL::getInstance().*UDP_HIL::getInstance().getValidGPSstate)();
@@ -1500,6 +1514,12 @@ AP_GPS_UBLOX::_parse_gps(void)
         }
 
     #ifdef UDP_HIL_UBLOX
+#ifdef TIMING_EXPERIMENT_UBLOX_PARSE_GPS_CALL_MSG_PRECISION
+    clock_gettime(CLOCK_MONOTONIC_RAW, &UBLOX_MSG_tick_nanos);
+    dt = (uint64_t)(UBLOX_MSG_tick_nanos.tv_sec - UBLOX_MSG_prev_tick_nanos.tv_sec) * (uint64_t)1000000000UL + (uint64_t)(UBLOX_MSG_tick_nanos.tv_nsec - UBLOX_MSG_prev_tick_nanos.tv_nsec);
+    UBLOX_MSG_prev_tick_nanos = UBLOX_MSG_tick_nanos;
+    TIMING_EXPERIMENT_UBLOX_CALLPRECMSG_OUTPUT(dt);
+    #endif
         //due to c++ standard: It is not allowed to jump (e.g. via goto, switch-case, etc.) into a scope that has a variable with a non-trivial initializer.
         {
             GPSStruct hilFrameIn = (UDP_HIL::getInstance().*UDP_HIL::getInstance().getValidGPSstate)();
@@ -1565,6 +1585,12 @@ AP_GPS_UBLOX::_parse_gps(void)
         Debug("MSG_DOP");
         noReceivedHdop = false;
         #ifdef UDP_HIL_UBLOX
+#ifdef TIMING_EXPERIMENT_UBLOX_PARSE_GPS_CALL_MSG_PRECISION
+    clock_gettime(CLOCK_MONOTONIC_RAW, &UBLOX_MSG_tick_nanos);
+    dt = (uint64_t)(UBLOX_MSG_tick_nanos.tv_sec - UBLOX_MSG_prev_tick_nanos.tv_sec) * (uint64_t)1000000000UL + (uint64_t)(UBLOX_MSG_tick_nanos.tv_nsec - UBLOX_MSG_prev_tick_nanos.tv_nsec);
+    UBLOX_MSG_prev_tick_nanos = UBLOX_MSG_tick_nanos;
+    TIMING_EXPERIMENT_UBLOX_CALLPRECMSG_OUTPUT(dt);
+    #endif
         //due to c++ standard: It is not allowed to jump (e.g. via goto, switch-case, etc.) into a scope that has a variable with a non-trivial initializer.
         {
             GPSStruct hilFrameIn = (UDP_HIL::getInstance().*UDP_HIL::getInstance().getValidGPSstate)();
@@ -1598,6 +1624,12 @@ AP_GPS_UBLOX::_parse_gps(void)
             break;
         }
     #ifdef UDP_HIL_UBLOX
+#ifdef TIMING_EXPERIMENT_UBLOX_PARSE_GPS_CALL_MSG_PRECISION
+    clock_gettime(CLOCK_MONOTONIC_RAW, &UBLOX_MSG_tick_nanos);
+    dt = (uint64_t)(UBLOX_MSG_tick_nanos.tv_sec - UBLOX_MSG_prev_tick_nanos.tv_sec) * (uint64_t)1000000000UL + (uint64_t)(UBLOX_MSG_tick_nanos.tv_nsec - UBLOX_MSG_prev_tick_nanos.tv_nsec);
+    UBLOX_MSG_prev_tick_nanos = UBLOX_MSG_tick_nanos;
+    TIMING_EXPERIMENT_UBLOX_CALLPRECMSG_OUTPUT(dt);
+    #endif
         //due to c++ standard: It is not allowed to jump (e.g. via goto, switch-case, etc.) into a scope that has a variable with a non-trivial initializer.
         {
             GPSStruct hilFrameIn = (UDP_HIL::getInstance().*UDP_HIL::getInstance().getValidGPSstate)();
@@ -1732,6 +1764,12 @@ AP_GPS_UBLOX::_parse_gps(void)
     case MSG_PVT:
         Debug("MSG_PVT");
         #ifdef UDP_HIL_UBLOX
+#ifdef TIMING_EXPERIMENT_UBLOX_PARSE_GPS_CALL_MSG_PRECISION
+    clock_gettime(CLOCK_MONOTONIC_RAW, &UBLOX_MSG_tick_nanos);
+    dt = (uint64_t)(UBLOX_MSG_tick_nanos.tv_sec - UBLOX_MSG_prev_tick_nanos.tv_sec) * (uint64_t)1000000000UL + (uint64_t)(UBLOX_MSG_tick_nanos.tv_nsec - UBLOX_MSG_prev_tick_nanos.tv_nsec);
+    UBLOX_MSG_prev_tick_nanos = UBLOX_MSG_tick_nanos;
+    TIMING_EXPERIMENT_UBLOX_CALLPRECMSG_OUTPUT(dt);
+    #endif
         //due to c++ standard: It is not allowed to jump (e.g. via goto, switch-case, etc.) into a scope that has a variable with a non-trivial initializer.
         {
             GPSStruct hilFrameIn = (UDP_HIL::getInstance().*UDP_HIL::getInstance().getValidGPSstate)();
@@ -1899,6 +1937,12 @@ AP_GPS_UBLOX::_parse_gps(void)
     case MSG_TIMEGPS:
         Debug("MSG_TIMEGPS");
         #ifdef UDP_HIL_UBLOX
+#ifdef TIMING_EXPERIMENT_UBLOX_PARSE_GPS_CALL_MSG_PRECISION
+    clock_gettime(CLOCK_MONOTONIC_RAW, &UBLOX_MSG_tick_nanos);
+    dt = (uint64_t)(UBLOX_MSG_tick_nanos.tv_sec - UBLOX_MSG_prev_tick_nanos.tv_sec) * (uint64_t)1000000000UL + (uint64_t)(UBLOX_MSG_tick_nanos.tv_nsec - UBLOX_MSG_prev_tick_nanos.tv_nsec);
+    UBLOX_MSG_prev_tick_nanos = UBLOX_MSG_tick_nanos;
+    TIMING_EXPERIMENT_UBLOX_CALLPRECMSG_OUTPUT(dt);
+    #endif
         //due to c++ standard: It is not allowed to jump (e.g. via goto, switch-case, etc.) into a scope that has a variable with a non-trivial initializer.
         {
             GPSStruct hilFrameIn = (UDP_HIL::getInstance().*UDP_HIL::getInstance().getValidGPSstate)();
@@ -1921,6 +1965,12 @@ AP_GPS_UBLOX::_parse_gps(void)
     case MSG_VELNED:
         Debug("MSG_VELNED");
         #ifdef UDP_HIL_UBLOX
+#ifdef TIMING_EXPERIMENT_UBLOX_PARSE_GPS_CALL_MSG_PRECISION
+    clock_gettime(CLOCK_MONOTONIC_RAW, &UBLOX_MSG_tick_nanos);
+    dt = (uint64_t)(UBLOX_MSG_tick_nanos.tv_sec - UBLOX_MSG_prev_tick_nanos.tv_sec) * (uint64_t)1000000000UL + (uint64_t)(UBLOX_MSG_tick_nanos.tv_nsec - UBLOX_MSG_prev_tick_nanos.tv_nsec);
+    UBLOX_MSG_prev_tick_nanos = UBLOX_MSG_tick_nanos;
+    TIMING_EXPERIMENT_UBLOX_CALLPRECMSG_OUTPUT(dt);
+    #endif
         //due to c++ standard: It is not allowed to jump (e.g. via goto, switch-case, etc.) into a scope that has a variable with a non-trivial initializer.
         {
             GPSStruct hilFrameIn = (UDP_HIL::getInstance().*UDP_HIL::getInstance().getValidGPSstate)();
@@ -1969,6 +2019,12 @@ AP_GPS_UBLOX::_parse_gps(void)
         {
         Debug("MSG_NAV_SVINFO\n");
         #ifdef UDP_HIL_UBLOX
+#ifdef TIMING_EXPERIMENT_UBLOX_PARSE_GPS_CALL_MSG_PRECISION
+    clock_gettime(CLOCK_MONOTONIC_RAW, &UBLOX_MSG_tick_nanos);
+    dt = (uint64_t)(UBLOX_MSG_tick_nanos.tv_sec - UBLOX_MSG_prev_tick_nanos.tv_sec) * (uint64_t)1000000000UL + (uint64_t)(UBLOX_MSG_tick_nanos.tv_nsec - UBLOX_MSG_prev_tick_nanos.tv_nsec);
+    UBLOX_MSG_prev_tick_nanos = UBLOX_MSG_tick_nanos;
+    TIMING_EXPERIMENT_UBLOX_CALLPRECMSG_OUTPUT(dt);
+    #endif
         //due to c++ standard: It is not allowed to jump (e.g. via goto, switch-case, etc.) into a scope that has a variable with a non-trivial initializer.
         {
             GPSStruct hilFrameIn = (UDP_HIL::getInstance().*UDP_HIL::getInstance().getValidGPSstate)();
