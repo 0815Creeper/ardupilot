@@ -2,6 +2,9 @@
 
 #ifdef UDP_HIL_ENABLED
 
+#define UDP_HIL_RESPONSE_TYPE_ON_RECEIVE_ONLY
+//#define UDP_HIL_RESPONSE_TYPE_ALWAYS
+
 #include <unistd.h>
 #include <AP_HAL/AP_HAL.h>
 #include <AP_Math/AP_Math.h>
@@ -83,6 +86,12 @@ void UDP_HIL::init_socket() {
 void UDP_HIL::setInData(struct DataStruct* newData) {
     std::lock_guard<std::mutex> lock(in_mutex_);
     memcpy((&in_data_), newData, sizeof(struct DataStruct));
+}
+void UDP_HIL::addInSeq() {
+    std::lock_guard<std::mutex> lock(in_mutex_);
+    if (in_data_.seq_num == 255) 
+        in_data_.seq_num = 0;
+    in_data_.seq_num++;
 }
 
 DataStruct UDP_HIL::getOutData() {
@@ -201,12 +210,15 @@ void UDP_HIL::setOutGPSTOW(uint32_t t) {
 }
 
 void UDP_HIL::_timer_tick() {
+    #if defined(TIMING_EXPERIMENT_UDP_HIL_TIMER_TICK_CALL_PRECISION) || defined(TIMING_EXPERIMENT_UDP_HIL_SENDTO_DONE_PRECISION)
+    uint64_t dt;
+    #endif
     #ifdef TIMING_EXPERIMENT_UDP_HIL_TIMER_TICK_CALL_PRECISION
     clock_gettime(CLOCK_MONOTONIC_RAW, &UDP_HIL_tick_nanos);
     #ifdef TIMING_EXPERIMENT_UDP_HIL_GPIO_OUTPUT_26_ENABLED
     GPIO_WRITE_26_0(); 
     #endif
-    uint64_t dt = (uint64_t)(UDP_HIL_tick_nanos.tv_sec - UDP_HIL_prev_tick_nanos.tv_sec) * (uint64_t)1000000000UL + (uint64_t)(UDP_HIL_tick_nanos.tv_nsec - UDP_HIL_prev_tick_nanos.tv_nsec);
+    dt = (uint64_t)(UDP_HIL_tick_nanos.tv_sec - UDP_HIL_prev_tick_nanos.tv_sec) * (uint64_t)1000000000UL + (uint64_t)(UDP_HIL_tick_nanos.tv_nsec - UDP_HIL_prev_tick_nanos.tv_nsec);
     UDP_HIL_prev_tick_nanos = UDP_HIL_tick_nanos;
     TIMING_EXPERIMENT_UDP_HIL_OUTPUT(dt);
     #ifdef TIMING_EXPERIMENT_UDP_HIL_GPIO_OUTPUT_26_ENABLED
@@ -214,10 +226,14 @@ void UDP_HIL::_timer_tick() {
     #endif
     #endif
 
+    tick_calls_since_init++;
+    tick_calls_total++;
+
     #ifdef UDP_HIL_RESET_AFTER_MILLIS
     if(last_valid_packet !=0 && AP_HAL::millis()-last_valid_packet > UDP_HIL_RESET_AFTER_MILLIS){
         printf("UDP_HIL: reset after %i ms\n", UDP_HIL_RESET_AFTER_MILLIS);
         last_valid_packet = 0;
+        tick_calls_since_init = 0;
         close(udp_hil_socket);
         udp_hil_socket = -1;
         socket_inited = false;
@@ -299,15 +315,18 @@ void UDP_HIL::_timer_tick() {
          GPIO_WRITE_26_1();
         #endif
         //TODO not good but for testing
+        if (switchedOver)
+            printf("UDP_HIL: rcv_timeouts: %.3f, packets_recv: %u, packets_send: %u, tick_calls_total: %u, tick_calls_since_init: %u\n", 100*(1-(float)packets_recv/(float)tick_calls_since_init), packets_recv, packets_send, tick_calls_total, tick_calls_since_init);
         if (errno == EAGAIN || errno == EWOULDBLOCK) { //|| AP_HAL::micros()<10000000UL
             // Keine Daten empfangen, einfach weiter machen
-            return;
+            //return;
         } else {
             perror("Fehler beim Empfangen von Daten");
             socket_inited = false;
             return;
         }
     } else if (recv_len == sizeof(buffer)) {
+        packets_recv++;
         //printf("UDP_HIL: seq_num: %i\n", getSeq(buffer));
         if(!((getSeq(in_data_) == 255 && getSeq(buffer) == 1) || getSeq(buffer) == getSeq(in_data_) + 1 || getSeq(buffer) == 0)){
             printf("FEHLER SEQ NUM FOLGE: lseq:%i seq:%i \n", getSeq(in_data_), getSeq(buffer));
@@ -320,10 +339,21 @@ void UDP_HIL::_timer_tick() {
             inDataSwitchOver();
         else if (!switchedOver) {
             printf("UDP_HIL: INITAL_PACKET SEQ 0\n");
+            packets_send = 0;
+            packets_recv = 1;
+            tick_calls_since_init = 1;
             response_addr.sin_family = AF_INET;
             response_addr.sin_addr = client_addr.sin_addr;
             response_addr.sin_port = htons(UDP_HIL_RESPONSE_PORT);
         }
+          #ifdef UDP_HIL_RESPONSE_TYPE_ALWAYS
+    } else {
+        printf("FEHLER RCV_LEN: sizeof(buffer):%i recv_len:%i \n", sizeof(buffer), recv_len);
+        exit(1);
+    }
+
+    if(last_valid_packet != 0){
+          #endif
         buffer = getOutData();
         buffer.seq_num = getInSeq() + 1;
         
@@ -342,9 +372,9 @@ void UDP_HIL::_timer_tick() {
 
         #ifdef TIMING_EXPERIMENT_UDP_HIL_SENDTO_DONE_PRECISION
         clock_gettime(CLOCK_MONOTONIC_RAW, &UDP_HIL_tick_nanos);
-        uint64_t dt = (uint64_t)(UDP_HIL_tick_nanos.tv_sec - UDP_HIL_prev_tick_nanos.tv_sec) * (uint64_t)1000000000UL + (uint64_t)(UDP_HIL_tick_nanos.tv_nsec - UDP_HIL_prev_tick_nanos.tv_nsec);
+        dt = (uint64_t)(UDP_HIL_tick_nanos.tv_sec - UDP_HIL_prev_tick_nanos.tv_sec) * (uint64_t)1000000000UL + (uint64_t)(UDP_HIL_tick_nanos.tv_nsec - UDP_HIL_prev_tick_nanos.tv_nsec);
         UDP_HIL_prev_tick_nanos = UDP_HIL_tick_nanos;
-        TIMING_EXPERIMENT_UDP_HIL_OUTPUT(dt);
+        TIMING_SENDTO_DONE_PRECISION_UDP_HIL_OUTPUT(dt);
         #endif
 
         #if defined(TIMING_EXPERIMENT_UDP_HIL_SENDTO_DURATION_SYSTEM)
@@ -360,19 +390,25 @@ void UDP_HIL::_timer_tick() {
         if (sent_len < 0) {
             perror("Fehler beim Senden der Antwort");
         }
+        packets_send++;
 
         #if defined(TIMING_EXPERIMENT_UDP_HIL_SENDTO_DURATION_SYSTEM) || defined(TIMING_EXPERIMENT_UDP_HIL_SENDTO_DURATION_PROCESS) || defined(TIMING_EXPERIMENT_UDP_HIL_SENDTO_DURATION_THREAD) || defined(TIMING_EXPERIMENT_UDP_HIL_RECVFROM_DURATION_SYSTEM) || defined(TIMING_EXPERIMENT_UDP_HIL_RECVFROM_DURATION_PROCESS) || defined(TIMING_EXPERIMENT_UDP_HIL_RECVFROM_DURATION_THREAD)
         int64_t UDP_HIL_TimeOperation_difference = (int64_t)(UDP_HIL_TimeOperation_tsp.tv_sec - UDP_HIL_TimeOperation_ts.tv_sec) * (int64_t)1000000000UL + (int64_t)(UDP_HIL_TimeOperation_tsp.tv_nsec - UDP_HIL_TimeOperation_ts.tv_nsec);
         TIMING_EXPERIMENT_UDP_HIL_OUTPUT(UDP_HIL_TimeOperation_difference);
-        #endif    
-    } else {
+        #endif 
+        #ifdef UDP_HIL_RESPONSE_TYPE_ON_RECEIVE_ONLY
+        } else {
         printf("FEHLER RCV_LEN: sizeof(buffer):%i recv_len:%i \n", sizeof(buffer), recv_len);
         exit(1);
+        #endif
     }
+
+        #ifdef UDP_HIL_RESPONSE_TYPE_ALWAYS
     while(recvfrom(udp_hil_socket, &buffer, sizeof(buffer), 0, (struct sockaddr *)&client_addr, &addr_len) != -1){
         printf("UDP_HIL skipping packet\n");
-
+        addInSeq();
     }
+        #endif
 
 }
 

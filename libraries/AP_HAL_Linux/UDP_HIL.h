@@ -94,6 +94,7 @@ private:
 
     static uint8_t getSeq(const DataStruct& data);
     void setInData(struct DataStruct* newData);
+    void addInSeq();
     DataStruct getOutData();
 
     void inDataSwitchOver();
@@ -109,11 +110,15 @@ private:
     bool socket_inited = false;
 
     uint32_t last_debug_print = 0;
+    uint32_t packets_send = 0;
+    uint32_t packets_recv = 0;
+    uint32_t tick_calls_total = 0;
+    uint32_t tick_calls_since_init = 0;
 
     void setOutGPSTOW(uint32_t t);
 
     #ifdef UDP_HIL_RESET_AFTER_MILLIS
-    uint32_t last_valid_packet ;
+    uint32_t last_valid_packet = 0;
     #endif
 
     #ifdef TIMING_EXPERIMENT_UDP_HIL_GPIO_OUTPUT_26_ENABLED

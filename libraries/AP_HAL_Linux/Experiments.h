@@ -72,7 +72,7 @@
 #define TIMING_EXPERIMENT_UDP_HIL_OUTPUT(x) printf("UDP_HIL_TIMING_EXPERIMENT_OUTPUT: %lli\n", x)
 //#define TIMING_EXPERIMENT_UDP_HIL_OUTPUT(x) do { FILE *file = fopen("/home/pi/experiment_udp_hil_output.txt", "a"); if (file) { fprintf(file, "%lli\n", x); fclose(file); } } while (0)
 //#define TIMING_EXPERIMENT_UDP_HIL_OUTPUT(x) do { FILE *file = fopen("/run/testfiles/experiment_udp_hil_output.txt", "a"); if (file) { fprintf(file, "%lli\n", x); fclose(file); } } while (0)
-
+#define TIMING_SENDTO_DONE_PRECISION_UDP_HIL_OUTPUT(x) printf("UDP_HIL_TIMING_SENDTO_DONE_PRECISION_OUTPUT: %lli\n", x)
 
 #define TIMING_EXPERIMENT_MS5611_OUTPUT(x) printf("MS5611_TIMING_EXPERIMENT_OUTPUT: %lli\n", x)
 //#define TIMING_EXPERIMENT_MS5611_OUTPUT(x) do { FILE *file = fopen("/home/pi/experiment_MS5611_output.txt", "a"); if (file) { fprintf(file, "%lli\n", x); fclose(file); } } while (0)
