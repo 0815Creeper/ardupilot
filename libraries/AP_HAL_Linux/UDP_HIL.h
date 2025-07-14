@@ -9,6 +9,7 @@
 #include <fcntl.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
+#include <sys/ioctl.h>
 
 #define UDP_HIL_IMU_BUFFER_LEN 32
 
@@ -44,9 +45,43 @@ struct DataStruct {
     uint16_t IMU_buff[MPU_SAMPLE_SIZE*UDP_HIL_IMU_BUFFER_LEN/sizeof(uint16_t)];
     Vector3f MAG_xyz;
     uint8_t seq_num;
-    uint8_t gps_len;
-    uint8_t gps_setup;
+    uint8_t udp_hil_config; //msb7 ... lsb0 : bit0=UDP_HIL_RESPONSE_TYPE_ALWAYS 
+    uint8_t unused_reserved;
     GPSStruct GPSstate;
+
+    void reset() {
+        // Reset individual members to zero 
+        motorPWM0 = 0;
+        motorPWM1 = 0;
+        motorPWM2 = 0;
+        motorPWM3 = 0;
+        Baro_pressure = 0.0f;
+        Baro_temprature = 0.0f;
+        memset(IMU_buff, 0, sizeof(IMU_buff));
+        MAG_xyz.x = 0.0f;
+        MAG_xyz.y = 0.0f;
+        MAG_xyz.z = 0.0f;
+        seq_num = 0;
+        udp_hil_config = 0;
+        unused_reserved = 0;
+        GPSstate.lat = 0;
+        GPSstate.lon = 0;
+        GPSstate.alt = 0;
+        GPSstate.gspd = 0.0f;
+        GPSstate.gcourse = 0.0f;
+        GPSstate.velocity.x = 0.0f;
+        GPSstate.velocity.y = 0.0f;
+        GPSstate.velocity.z = 0.0f;
+        GPSstate.horizontal_accuracy = 0.0f;
+        GPSstate.vertical_accuracy = 0.0f;
+        GPSstate.speed_accuracy = 0.0f;
+        GPSstate.vDOP = 0;
+        GPSstate.hDOP = 0;
+        GPSstate.time_week_ms = 0;
+        GPSstate.time_week = 0;
+        GPSstate.status = 0;
+        GPSstate.num_sats = 0;
+    }
 };
 
 class UDP_HIL {
@@ -112,8 +147,13 @@ private:
     uint32_t last_debug_print = 0;
     uint32_t packets_send = 0;
     uint32_t packets_recv = 0;
+    uint32_t packets_recv_B = 0;
+    uint32_t zero_packets_in_os_queue_cnt_B = 0;
+    uint32_t one_packets_in_os_queue_cnt_B = 0;
+    uint32_t more_packets_in_os_queue_cnt_B = 0;
     uint32_t tick_calls_total = 0;
     uint32_t tick_calls_since_init = 0;
+
 
     void setOutGPSTOW(uint32_t t);
 
