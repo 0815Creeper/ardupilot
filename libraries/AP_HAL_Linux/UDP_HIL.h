@@ -45,7 +45,7 @@ struct DataStruct {
     uint16_t IMU_buff[MPU_SAMPLE_SIZE*UDP_HIL_IMU_BUFFER_LEN/sizeof(uint16_t)];
     Vector3f MAG_xyz;
     uint8_t seq_num;
-    uint8_t udp_hil_config; //msb7 ... lsb0 : bit0=UDP_HIL_RESPONSE_TYPE_ALWAYS 
+    uint8_t udp_hil_config; //msb7 ... lsb0 : bit0=UDP_HIL_RESPONSE_TYPE_ALWAYS; bit1=START_EXPERIMENT
     uint8_t unused_reserved;
     GPSStruct GPSstate;
 
@@ -107,7 +107,8 @@ public:
     GPSStruct getOutGPSstate();
     void getOutBaro(float* p, float* t);
 
-    //todo switchover func for all getIn Funcs
+    int16_t getInIMUgx();
+    bool getInStartExperiment();
 
     // points to getOutGPSstate initally until udp stream is available
     void (UDP_HIL::*getValidIMUbuff)(uint8_t* buff, uint8_t offset8);

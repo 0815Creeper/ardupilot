@@ -2,13 +2,6 @@
 
 #ifdef UDP_HIL_ENABLED
 
-#define UDP_HIL_RESPONSE_TYPE_ALWAYS // vs only on recive
-//#define UDP_HIL_CLEAR_OS_UDP_QUEUE // only available if UDP_HIL_RESPONSE_TYPE_ALWAYS is set, will increase package loss (by skips) but reduce latency
-#define UDP_HIL_RESPONSE_TYPE_ALWAYS_START_AFTER (3*UDP_HIL_FREQ) // ticks after init to start sending responses in "always" mode. Before, we only send on recive
-#define UDP_HIL_DEBUG_PACKET_STATS_INTERVAL (10*UDP_HIL_FREQ) // how often to print packet stats, 10 seconds in this case 
-#define UDP_HIL_DEBUG_PACKET_TIMOUTS_AND_SKIPS
-#define UDP_HIL_DEBUG_PACKET_STATS_INTERVAL_PRINT
-
 #include <unistd.h>
 #include <AP_HAL/AP_HAL.h>
 #include <AP_Math/AP_Math.h>
@@ -136,6 +129,15 @@ void UDP_HIL::getInIMUbuff(uint8_t* buff, uint8_t offset8) {
 void UDP_HIL::getOutIMUbuff(uint8_t* buff, uint8_t offset8) {
     std::lock_guard<std::mutex> lock(out_mutex_);
     memcpy(buff, out_data_.IMU_buff + offset8 * MPU_SAMPLE_SIZE * MPU_FIFO_BUFFER_LEN, MPU_SAMPLE_SIZE * MPU_FIFO_BUFFER_LEN);
+}
+
+int16_t UDP_HIL::getInIMUgx() {
+    std::lock_guard<std::mutex> lock(in_mutex_);
+    return (in_data_.IMU_buff[5] << 8) | (in_data_.IMU_buff[5] >> 8);
+}
+bool UDP_HIL::getInStartExperiment() {
+    std::lock_guard<std::mutex> lock(in_mutex_);
+    return (in_data_.udp_hil_config & 0x02) != 0;
 }
 
 void UDP_HIL::getInMAGbuff(Vector3f* buff) {

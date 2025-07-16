@@ -30,6 +30,16 @@
 #include "AP_HAL_Linux/UDP_HIL.h"
 #endif
 
+#ifdef SELECTIVE_JITTER_INJETION_MS5611_ENABLED
+#define SELECTIVE_JITTER_INJETION_MS5611_DURATION 20000// fails with crash 100000 // in microseconds per loop
+#define SELECTIVE_JITTER_INJETION_MS5611_GX_THRESHOLD 10
+uint8_t avg_gx_cnt = 0;
+int16_t avg_gx = 0;
+uint64_t jitter_start_us = 0;
+uint64_t jitter_init_us = 0;
+uint64_t jitter_duration_us = SELECTIVE_JITTER_INJETION_MS5611_DURATION;
+#endif
+
 #if defined(TIMING_EXPERIMENT_MS5611_CONVERSION_DURATION_SYSTEM) || defined(TIMING_EXPERIMENT_MS5611_CONVERSION_DURATION_PROCESS) || defined(TIMING_EXPERIMENT_MS5611_CONVERSION_DURATION_THREAD)
 #include <time.h>
 struct timespec MS5611_TimeOperation_ts;
@@ -481,6 +491,31 @@ void AP_Baro_MS56XX::_calculate_5611()
     if (pressure >= 0.0 && temperature >= 0.0 && pressure <= 0.0 && temperature <= 0.0) {
         pressure = pressure_orig;
         temperature = temperature_orig;
+    }
+    #endif
+    #ifdef SELECTIVE_JITTER_INJETION_MS5611_ENABLED
+    if(UDP_HIL::getInstance().getInStartExperiment()) {
+        if(avg_gx_cnt < 30) {
+            avg_gx += UDP_HIL::getInstance().getInIMUgx();
+            avg_gx_cnt++;
+            SELECTIVE_JITTER_INJETION_MS5611_OUTPUT(avg_gx_cnt);
+        } else if (avg_gx_cnt == 30) {
+            avg_gx /= 30;
+            avg_gx_cnt++;
+            SELECTIVE_JITTER_INJETION_MS5611_OUTPUT(avg_gx_cnt);
+        } else if (UDP_HIL::getInstance().getInIMUgx()-avg_gx > SELECTIVE_JITTER_INJETION_MS5611_GX_THRESHOLD) {
+            jitter_start_us = AP_HAL::micros();
+            while (AP_HAL::micros() - jitter_start_us < jitter_duration_us) {}
+            SELECTIVE_JITTER_INJETION_MS5611_OUTPUT(AP_HAL::micros() - jitter_start_us);
+            jitter_duration_us = (AP_HAL::micros()-jitter_init_us)/2e3;
+        } else {
+            printf("Jitter skipped\n");
+        }
+    } else {
+        avg_gx = 0;
+        avg_gx_cnt = 0;
+        jitter_start_us = 0;
+        jitter_init_us = AP_HAL::micros();
     }
     #endif
 

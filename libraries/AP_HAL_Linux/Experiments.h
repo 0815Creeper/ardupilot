@@ -3,6 +3,14 @@
 // configuration
 #define UDP_HIL_FREQ    1000 // frequency of udp_hil data exchange
 #define UDP_HIL_RESET_AFTER_MILLIS 10000 // reset after this many milliseconds
+#define UDP_HIL_RESPONSE_TYPE_ALWAYS // vs only on recive
+#ifdef UDP_HIL_RESPONSE_TYPE_ALWAYS
+    //#define UDP_HIL_CLEAR_OS_UDP_QUEUE // only available if UDP_HIL_RESPONSE_TYPE_ALWAYS is set, will increase package loss (by skips) but reduce latency
+#endif
+#define UDP_HIL_RESPONSE_TYPE_ALWAYS_START_AFTER (3*UDP_HIL_FREQ) // ticks after init to start sending responses in "always" mode. Before, we only send on recive
+#define UDP_HIL_DEBUG_PACKET_STATS_INTERVAL (10*UDP_HIL_FREQ) // how often to print packet stats, 10 seconds in this case 
+#define UDP_HIL_DEBUG_PACKET_TIMOUTS_AND_SKIPS
+#define UDP_HIL_DEBUG_PACKET_STATS_INTERVAL_PRINT
 //#define TIMING_EXPERIMENT_MPU9250_UDP_DECENTRALIZED_RECV_PORT 13018
 //#define TIMING_EXPERIMENT_MPU9250_UDP_DECENTRALIZED_SEND_PORT 13019
 //#define TIMING_EXPERIMENT_MPU9250_UDP_DECENTRALIZED_IP "10.42.0.1"
@@ -64,6 +72,8 @@
 //#define TIMING_EXPERIMENT_PWM_SET_DUTY_CYCLE_CALL_PRECISION
 //end of Experiments
 
+#define SELECTIVE_JITTER_INJETION_MS5611_ENABLED // enables selective jitter injection for ms5611 on main thread
+
 
 // Experiment output
 // only one per class at a time !!!
@@ -99,4 +109,6 @@
 //#define TIMING_EXPERIMENT_PWM_OUTPUT(c,x) printf("PWM%hhu_TIMING_EXPERIMENT_OUTPUT: %lli\n", c, x)
 //#define TIMING_EXPERIMENT_PWM_OUTPUT(c,x) do { FILE *file = fopen("/home/pi/experiment_PWM_output.txt", "a"); if (file) { fprintf(file, "%hhu: %lli\n", c, x); fclose(file); } } while (0)
 //#define TIMING_EXPERIMENT_PWM_OUTPUT(c,x) do { FILE *file = fopen("/run/testfiles/experiment_PWM_output.txt", "a"); if (file) { fprintf(file, "%hhu: %lli\n", c, x); fclose(file); } } while (0)
+
+#define SELECTIVE_JITTER_INJETION_MS5611_OUTPUT(x) printf("SELECTIVE_JITTER_INJETION_MS5611_OUTPUT: %lli\n", (long long int)x)
 // end of Experiment output
