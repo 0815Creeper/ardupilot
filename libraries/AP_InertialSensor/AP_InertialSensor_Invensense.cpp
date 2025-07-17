@@ -32,6 +32,9 @@
 #include <AP_HAL_Linux/Experiments.h>
 
 #ifdef UDP_HIL_MPU9250
+#define FIX_MPU9250_FIFO_LEN_RESET
+#define DISABLE_INTERNAL_ERROR_IMU_RESET
+//#define MPU9250_FORCE_LOWER_RATE 250 // 1kHz meassurements (fifo) and set communication rate to value
 #include "AP_HAL_Linux/UDP_HIL.h"
 int mpu9250_fifo_loop_count = 0;
 #endif
@@ -205,7 +208,9 @@ void AP_InertialSensor_Invensense::_fifo_reset(bool log_error)
         reset_count++;
         if (reset_count == 10) {
             // 10 resets, each happening within 10s, triggers an internal error
-            INTERNAL_ERROR(AP_InternalError::error_t::imu_reset);
+            #ifndef DISABLE_INTERNAL_ERROR_IMU_RESET
+                INTERNAL_ERROR(AP_InternalError::error_t::imu_reset);
+            #endif
             reset_count = 0;
         }
     } else if (log_error &&
@@ -348,10 +353,17 @@ void AP_InertialSensor_Invensense::start()
         break;
     }
 
-    if (!_imu.register_gyro(_gyro_instance, 1000, _dev->get_bus_id_devtype(gdev)) ||
-        !_imu.register_accel(_accel_instance, 1000, _dev->get_bus_id_devtype(adev))) {
-        return;
-    }
+    #ifdef MPU9250_FORCE_LOWER_RATE
+        if (!_imu.register_gyro(_gyro_instance, MPU9250_FORCE_LOWER_RATE, _dev->get_bus_id_devtype(gdev)) ||
+            !_imu.register_accel(_accel_instance, MPU9250_FORCE_LOWER_RATE, _dev->get_bus_id_devtype(adev))) {
+            return;
+        }
+    #else
+        if (!_imu.register_gyro(_gyro_instance, 1000, _dev->get_bus_id_devtype(gdev)) ||
+            !_imu.register_accel(_accel_instance, 1000, _dev->get_bus_id_devtype(adev))) {
+            return;
+        }
+    #endif
 
     // setup ODR and on-sensor filtering
     _set_filter_register();
@@ -976,10 +988,17 @@ void AP_InertialSensor_Invensense::_read_fifo()
             n_samples = 4;
         }
     } else {
-        if (n_samples > 32) {
-            need_reset = true;
-            n_samples = 24;
-        }
+        #ifdef FIX_MPU9250_FIFO_LEN_RESET
+            if (n_samples > 16) {
+                need_reset = true;
+                n_samples = 16;
+            }
+        #else
+            if (n_samples > 32) {
+                need_reset = true;
+                n_samples = 24;
+            }
+        #endif
     }
     mpu9250_fifo_loop_count = 0;
     while (n_samples > 0) {
@@ -1110,8 +1129,12 @@ void AP_InertialSensor_Invensense::_set_filter_register(void)
     // assume 1kHz sampling to start
     _gyro_fifo_downsample_rate = _accel_fifo_downsample_rate = 1;
     _gyro_to_accel_sample_ratio = 2;
-    _gyro_backend_rate_hz = _accel_backend_rate_hz =  1000;
-    
+    #ifdef MPU9250_FORCE_LOWER_RATE
+    _gyro_backend_rate_hz = _accel_backend_rate_hz =  MPU9250_FORCE_LOWER_RATE;
+    #else
+    _gyro_backend_rate_hz = _accel_backend_rate_hz = 1000;
+    #endif
+
     if (enable_fast_sampling(_accel_instance)) {
         _fast_sampling = _dev->bus_type() == AP_HAL::Device::BUS_TYPE_SPI;
         if (_fast_sampling) {
@@ -1160,8 +1183,11 @@ void AP_InertialSensor_Invensense::_set_filter_register(void)
     
     if (_fast_sampling) {
         // this gives us 8kHz sampling on gyros and 4kHz on accels
-        config |= BITS_DLPF_CFG_256HZ_NOLPF2;
-        //config |= BITS_DLPF_CFG_188HZ;
+        #ifdef MPU9250_FORCE_LOWER_RATE
+            config |= BITS_DLPF_CFG_188HZ;
+        #else
+            config |= BITS_DLPF_CFG_256HZ_NOLPF2;
+        #endif
     } else {
         // limit to 1kHz if not on SPI
         config |= BITS_DLPF_CFG_188HZ;
