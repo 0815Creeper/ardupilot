@@ -7,6 +7,7 @@
 
 #include <utility>
 
+#include "stdio.h"
 #include <AP_HAL/GPIO.h>
 
 extern const AP_HAL::HAL& hal;
@@ -341,6 +342,7 @@ void AP_InertialSensor_LSM9DS1::start(void)
     _set_accel_max_abs_offset(_accel_instance, 5.0f);
 
     /* start the timer process to read samples */
+    printf("LSM9DS1_Inertial_starting\n");
     _dev->register_periodic_callback(1000, FUNCTOR_BIND_MEMBER(&AP_InertialSensor_LSM9DS1::_poll_data, void));
 }
 
@@ -414,6 +416,9 @@ void AP_InertialSensor_LSM9DS1::_set_accel_scale(accel_scale scale)
  */
 void AP_InertialSensor_LSM9DS1::_poll_data()
 {
+    if (AP_HAL::millis() < 60e3) {
+        return;
+    }
     uint16_t samples = _register_read(LSM9DS1XG_FIFO_SRC);
 
 
@@ -433,6 +438,8 @@ void AP_InertialSensor_LSM9DS1::_poll_data()
         log_register_change(_dev->get_bus_id(), reg);
         _inc_accel_error_count(_accel_instance);
     }
+
+    //printf("LSM9DS1 polling: %d samples in FIFO\n", samples);
 }
 
 void AP_InertialSensor_LSM9DS1::_read_data_transaction_x(uint16_t samples)

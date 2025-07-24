@@ -32,9 +32,6 @@
 #include <AP_HAL_Linux/Experiments.h>
 
 #ifdef UDP_HIL_MPU9250
-#define FIX_MPU9250_FIFO_LEN_RESET
-#define DISABLE_INTERNAL_ERROR_IMU_RESET
-//#define MPU9250_FORCE_LOWER_RATE 250 // 1kHz meassurements (fifo) and set communication rate to value
 #include "AP_HAL_Linux/UDP_HIL.h"
 int mpu9250_fifo_loop_count = 0;
 #endif
@@ -647,6 +644,7 @@ void AP_InertialSensor_Invensense::_poll_data()
     uint64_t MPU9250_TimeOperation_difference = (int64_t)(MPU9250_TimeOperation_tsp.tv_sec - MPU9250_TimeOperation_ts.tv_sec) * (int64_t)1000000000UL + (int64_t)(MPU9250_TimeOperation_tsp.tv_nsec - MPU9250_TimeOperation_ts.tv_nsec);
     TIMING_EXPERIMENT_MPU9250_OUTPUT(MPU9250_TimeOperation_difference);
     #endif
+    //printf("MPU9250 poll data\n");
 }
 
 #if INVENSENSE_DEBUG_REG_CHANGE
@@ -1000,7 +998,10 @@ void AP_InertialSensor_Invensense::_read_fifo()
             }
         #endif
     }
-    mpu9250_fifo_loop_count = 0;
+    #ifdef UDP_HIL_MPU9250
+        mpu9250_fifo_loop_count = 0;
+    #endif
+
     while (n_samples > 0) {
         uint8_t n = MIN(n_samples, MPU_FIFO_BUFFER_LEN);
         if (!_dev->set_chip_select(true)) {
@@ -1038,7 +1039,9 @@ void AP_InertialSensor_Invensense::_read_fifo()
             }
         }
         n_samples -= n;
-        mpu9250_fifo_loop_count++;
+        #ifdef UDP_HIL_MPU9250
+            mpu9250_fifo_loop_count++;
+        #endif
     }
 
     if (need_reset) {

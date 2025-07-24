@@ -31,8 +31,6 @@
 #endif
 
 #ifdef SELECTIVE_JITTER_INJETION_MS5611_ENABLED
-#define SELECTIVE_JITTER_INJETION_MS5611_DURATION 20000// fails with crash 100000 // in microseconds per loop
-#define SELECTIVE_JITTER_INJETION_MS5611_GX_THRESHOLD 10
 uint8_t avg_gx_cnt = 0;
 int16_t avg_gx = 0;
 uint64_t jitter_start_us = 0;
@@ -507,7 +505,8 @@ void AP_Baro_MS56XX::_calculate_5611()
             jitter_start_us = AP_HAL::micros();
             while (AP_HAL::micros() - jitter_start_us < jitter_duration_us) {}
             SELECTIVE_JITTER_INJETION_MS5611_OUTPUT(AP_HAL::micros() - jitter_start_us);
-            jitter_duration_us = (AP_HAL::micros()-jitter_init_us)/2e3;
+            jitter_duration_us = 100000;
+            //jitter_duration_us = (AP_HAL::micros()-jitter_init_us)/2e3;
         } else {
             printf("Jitter skipped\n");
         }
