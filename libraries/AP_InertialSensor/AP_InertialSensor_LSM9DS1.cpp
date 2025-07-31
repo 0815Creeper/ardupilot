@@ -416,9 +416,9 @@ void AP_InertialSensor_LSM9DS1::_set_accel_scale(accel_scale scale)
  */
 void AP_InertialSensor_LSM9DS1::_poll_data()
 {
-    if (AP_HAL::millis() < 60e3) {
-        return;
-    }
+    //if (AP_HAL::millis() < 60e3) {
+    //    return;
+    //}
     uint16_t samples = _register_read(LSM9DS1XG_FIFO_SRC);
 
 
