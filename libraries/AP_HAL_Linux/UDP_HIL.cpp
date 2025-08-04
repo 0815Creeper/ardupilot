@@ -36,6 +36,9 @@ UDP_HIL::UDP_HIL() {
     #else
         printf("UDP_HIL_response_type: ON_RECIVE_ONLY\n");
     #endif
+    #ifdef UDP_HIL_DISABLE_SEQ_CHECK
+        printf("UDP_HIL: SEQ_CHECK DISABLED!!!\n");
+    #endif
     #ifdef TIMING_EXPERIMENT_UDP_HIL_GPIO_OUTPUT_26_ENABLED
         INIT_GPIO();
         GPIO_SET_OUTPUT_26();
@@ -366,9 +369,13 @@ void UDP_HIL::_timer_tick() {
         packets_recv++;
         packets_recv_B++;
         if(!(getSeq(buffer) == getSeq(in_data_) + 1 || (getSeq(in_data_) == 255 && getSeq(buffer) == 1) || getSeq(buffer) == 0)){
-            printf("FEHLER SEQ NUM FOLGE: lseq:%i seq:%i \n", getSeq(in_data_), getSeq(buffer));
-            exit(1);
-            return;
+            #ifdef UDP_HIL_DISABLE_SEQ_CHECK
+                printf("UDP_HIL: SEQ_CHECK DISABLED, but got wrong seq num: %i, expected: %i\n", getSeq(buffer), getSeq(in_data_) + 1);
+            #else
+                printf("FEHLER SEQ NUM FOLGE: lseq:%i seq:%i \n", getSeq(in_data_), getSeq(buffer));
+                exit(1);
+                return;
+            #endif
         }
         last_valid_packet = AP_HAL::millis();
         setInData(&buffer);
