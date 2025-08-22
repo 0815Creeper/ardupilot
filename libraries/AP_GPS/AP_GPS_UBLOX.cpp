@@ -2084,10 +2084,19 @@ AP_GPS_UBLOX::_parse_gps(void)
         }
     }
 
+    #ifdef BUTTERFLY_ATTACK_GPS
+        static int butterfly = 0;
+    #endif
     // we only return true when we get new position and speed data
     // this ensures we don't use stale data
     if (_new_position && _new_speed && _last_vel_time == _last_pos_time) {
-        _new_speed = _new_position = false;
+        #ifdef BUTTERFLY_ATTACK_GPS
+            _new_speed = _new_position = false;
+            butterfly++;
+            if(butterfly==4)
+                butterfly = 0;
+            return (butterfly==0);
+        #endif
         return true;
     }
     return false;

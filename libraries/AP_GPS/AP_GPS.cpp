@@ -17,6 +17,7 @@
 #if AP_GPS_ENABLED
 
 #include "AP_GPS.h"
+#include "stdio.h"
 
 #include <AP_Common/AP_Common.h>
 #include <AP_HAL/AP_HAL.h>
@@ -968,6 +969,16 @@ void AP_GPS::update_instance(uint8_t instance)
 
     // we have an active driver for this instance
     bool result = drivers[instance]->read();
+    #ifdef BUTTERFLY_ATTACK_GPS
+        static uint32_t results_cnt = 0;
+        results_cnt++;
+        static uint32_t results_true = 0;
+        if (result) {
+            results_true++;
+        }
+        printf("AP_GPS::update_instance(%u) result=%d, results_ratio=%05.2f%%, results_cnt=%u, results_true=%u\n",
+            instance, result, results_cnt == 0 ? 0.0f : (100.0f * results_true / results_cnt), results_cnt, results_true);
+    #endif
     uint32_t tnow = AP_HAL::millis();
 
     // if we did not get a message, and the idle timer of 2 seconds
