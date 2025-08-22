@@ -36,7 +36,7 @@
 int mpu9250_fifo_loop_count = 0;
 #endif
 
-#if defined(TIMING_EXPERIMENT_MPU9250_UDP_DECENTRALIZED_SEND_TO) || defined(TIMING_EXPERIMENT_MPU9250_UDP_DECENTRALIZED_RECV) || defined(TIMING_EXPERIMENT_MPU9250_UDP_DECENTRALIZED_RECV_FROM)
+#if defined(TIMING_EXPERIMENT_MPU9250_UDP_DECENTRALIZED_SEND_TO) || defined(TIMING_EXPERIMENT_MPU9250_UDP_DECENTRALIZED_RECV_FROM)
 //#include <stdlib.h>
 //#include <string.h>
 //#include <unistd.h>
@@ -49,7 +49,7 @@ struct sockaddr_in mpu9250_udp_sendto_addr;
 struct sockaddr_in mpu9250_udp_recv_addr;
 #endif
 
-#if defined(TIMING_EXPERIMENT_MPU9250_POLLDATA_DURATION_SYSTEM) || defined(TIMING_EXPERIMENT_MPU9250_POLLDATA_DURATION_PROCESS) || defined(TIMING_EXPERIMENT_MPU9250_POLLDATA_DURATION_THREAD)
+#if defined(TIMING_EXPERIMENT_MPU9250_POLLDATA_DURATION_SYSTEM)
 #include <time.h>
 struct timespec MPU9250_TimeOperation_ts;
 struct timespec MPU9250_TimeOperation_tsp;
@@ -492,7 +492,6 @@ void AP_InertialSensor_Invensense::start()
         printf("Fehler beim Setzen des non-blocking Modus\n");
         while(1);
     }
-
     memset(&mpu9250_udp_sendto_addr, 0, sizeof(mpu9250_udp_sendto_addr));
     mpu9250_udp_sendto_addr.sin_family = AF_INET;
     mpu9250_udp_sendto_addr.sin_addr.s_addr = inet_addr(TIMING_EXPERIMENT_MPU9250_UDP_DECENTRALIZED_IP);
@@ -615,12 +614,6 @@ void AP_InertialSensor_Invensense::_poll_data()
     MPU9250_CallPrecision_prev_nanos = MPU9250_CallPrecision_nanos;
     TIMING_EXPERIMENT_MPU9250_OUTPUT(MPU9250_CallPrecision_difference);
     #endif
-    #if defined(TIMING_EXPERIMENT_MPU9250_POLLDATA_DURATION_PROCESS)
-    clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &MPU9250_TimeOperation_ts);
-    #endif
-    #if defined(TIMING_EXPERIMENT_MPU9250_POLLDATA_DURATION_THREAD)
-    clock_gettime(CLOCK_THREAD_CPUTIME_ID, &MPU9250_TimeOperation_ts);
-    #endif
     #if defined(TIMING_EXPERIMENT_MPU9250_POLLDATA_DURATION_SYSTEM)
     clock_gettime(CLOCK_MONOTONIC_RAW, &MPU9250_TimeOperation_ts);
     #endif
@@ -631,16 +624,8 @@ void AP_InertialSensor_Invensense::_poll_data()
     _check_register_change();
 #endif // INVENSENSE_DEBUG_REG_CHANGE
 
-    #ifdef TIMING_EXPERIMENT_MPU9250_POLLDATA_DURATION_PROCESS
-    clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &MPU9250_TimeOperation_tsp);
-    #endif
-    #ifdef TIMING_EXPERIMENT_MPU9250_POLLDATA_DURATION_THREAD
-    clock_gettime(CLOCK_THREAD_CPUTIME_ID, &MPU9250_TimeOperation_tsp);
-    #endif  
-    #ifdef TIMING_EXPERIMENT_MPU9250_POLLDATA_DURATION_SYSTEM
+    #if defined(TIMING_EXPERIMENT_MPU9250_POLLDATA_DURATION_SYSTEM)
     clock_gettime(CLOCK_MONOTONIC_RAW, &MPU9250_TimeOperation_tsp);
-    #endif
-    #if defined(TIMING_EXPERIMENT_MPU9250_POLLDATA_DURATION_SYSTEM) || defined(TIMING_EXPERIMENT_MPU9250_POLLDATA_DURATION_PROCESS) || defined(TIMING_EXPERIMENT_MPU9250_POLLDATA_DURATION_THREAD)
     uint64_t MPU9250_TimeOperation_difference = (int64_t)(MPU9250_TimeOperation_tsp.tv_sec - MPU9250_TimeOperation_ts.tv_sec) * (int64_t)1000000000UL + (int64_t)(MPU9250_TimeOperation_tsp.tv_nsec - MPU9250_TimeOperation_ts.tv_nsec);
     TIMING_EXPERIMENT_MPU9250_OUTPUT(MPU9250_TimeOperation_difference);
     #endif
@@ -760,6 +745,7 @@ bool AP_InertialSensor_Invensense::_accumulate_sensor_rate_sampling(uint8_t *sam
     }
     #endif
     #ifdef TIMING_EXPERIMENT_MPU9250_UDP_DECENTRALIZED_RECV_FROM
+    //bool recivedValid = false;
     uint8_t buffer[MPU_SAMPLE_SIZE * MPU_FIFO_BUFFER_LEN];
 
     struct sockaddr_in mpu9250_udp_addr;
@@ -767,20 +753,20 @@ bool AP_InertialSensor_Invensense::_accumulate_sensor_rate_sampling(uint8_t *sam
     ssize_t recv_len = recvfrom(mpu9250_udp_socket, buffer, MPU_SAMPLE_SIZE * MPU_FIFO_BUFFER_LEN, 0,
                                 (struct sockaddr *)&mpu9250_udp_addr, &mpu9250_udp_addr_len);
     if (recv_len < 0) {
-        //printf("Fehler beim Empfangen der MPU-Daten, recv_len %d\n", recv_len);
-    }else if (recv_len != MPU_SAMPLE_SIZE * n_samples) {
-        printf("recv_len %zd != MPU_SAMPLE_SIZE * n_samples %d\n", recv_len, MPU_SAMPLE_SIZE * n_samples);
-        return false;
-    }
-    #endif
-    #ifdef TIMING_EXPERIMENT_MPU9250_UDP_DECENTRALIZED_RECV
-    uint8_t buffer[MPU_SAMPLE_SIZE * MPU_FIFO_BUFFER_LEN];
-    ssize_t recv_len = recv(mpu9250_udp_socket, buffer, MPU_SAMPLE_SIZE * MPU_FIFO_BUFFER_LEN, 0);
-    if (recv_len < 0) {
-        //printf("Fehler beim Empfangen der MPU-Daten, recv_len %d\n", recv_len);
-    }else if (recv_len != MPU_SAMPLE_SIZE * 8) {
-        printf("recv_len %zd != MPU_SAMPLE_SIZE * 8 %d\n", recv_len, MPU_SAMPLE_SIZE * 8);
-        return false;
+        printf("Fehler beim Empfangen der Daten\n");
+    }else if (recv_len != MPU_SAMPLE_SIZE * MPU_FIFO_BUFFER_LEN) {
+        printf("decentralized imu_udp_hil_sample received invalid length: %zd, expected: %d\n", recv_len, MPU_SAMPLE_SIZE * n_samples);
+    }else{
+        uint8_t buff_or = 0;
+        for(int j=0; j<MPU_SAMPLE_SIZE; j++) {
+            buff_or |= buffer[j];
+        }/*
+        if (!buff_or) {
+            printf("decentralized imu_udp_hil_sample invalid\n");
+        }else if (buffer[6] == 0 && buffer[7] == 0) {
+            printf("decentralized imu_udp_hil_sample temp invalid\n");
+        }else{recivedValid = true;}
+        */
     }
     #endif
     #if defined(UDP_HIL_MPU9250)
@@ -810,6 +796,9 @@ bool AP_InertialSensor_Invensense::_accumulate_sensor_rate_sampling(uint8_t *sam
         //if (!buff_or && UDP_HIL::getInstance().getInSeq() != 0) {
         //    printf("one invalid imu_udp_hil_sample at index %i \n", i);
         //}
+        //#elif defined(TIMING_EXPERIMENT_MPU9250_UDP_DECENTRALIZED_RECV_FROM)
+        //const uint8_t *data = recivedValid ? (buffer) : (samples + MPU_SAMPLE_SIZE * i);
+        //printf("data: %p, recivedValid: %d, samples: %p, i: %d\n", data, recivedValid, samples, i);
         
         #else
         const uint8_t *data = samples + MPU_SAMPLE_SIZE * i;

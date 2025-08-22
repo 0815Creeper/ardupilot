@@ -9,7 +9,7 @@
 #include "UDP_HIL.h"
 
 
-#if defined(TIMING_EXPERIMENT_UDP_HIL_RECVFROM_DURATION_SYSTEM) || defined(TIMING_EXPERIMENT_UDP_HIL_RECVFROM_DURATION_PROCESS) || defined(TIMING_EXPERIMENT_UDP_HIL_RECVFROM_DURATION_THREAD) 
+#if defined(TIMING_EXPERIMENT_UDP_HIL_RECVFROM_DURATION_SYSTEM) 
     #include <time.h>
     struct timespec UDP_HIL_TimeOperation_ts;
     struct timespec UDP_HIL_TimeOperation_tsp;
@@ -286,12 +286,6 @@ void UDP_HIL::_timer_tick() {
     #if defined(TIMING_EXPERIMENT_UDP_HIL_RECVFROM_DURATION_SYSTEM)
         clock_gettime(CLOCK_MONOTONIC_RAW, &UDP_HIL_TimeOperation_ts);
     #endif
-    #if defined(TIMING_EXPERIMENT_UDP_HIL_RECVFROM_DURATION_PROCESS)
-        clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &UDP_HIL_TimeOperation_ts);
-    #endif
-    #if defined(TIMING_EXPERIMENT_UDP_HIL_RECVFROM_DURATION_PROCESS)
-        clock_gettime(CLOCK_THREAD_CPUTIME_ID, &UDP_HIL_TimeOperation_ts);
-    #endif
     #ifdef TIMING_EXPERIMENT_UDP_HIL_PINGPONG_DURATION_SYSTEM
         struct timespec startWaitTS;
         uint64_t apt=AP_HAL::micros();
@@ -315,12 +309,6 @@ void UDP_HIL::_timer_tick() {
     #endif
     #ifdef  TIMING_EXPERIMENT_UDP_HIL_RECVFROM_DURATION_SYSTEM
         clock_gettime(CLOCK_MONOTONIC_RAW, &UDP_HIL_TimeOperation_tsp);
-    #endif
-    #ifdef  TIMING_EXPERIMENT_UDP_HIL_RECVFROM_DURATION_PROCESS
-        clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &UDP_HIL_TimeOperation_tsp);
-    #endif
-    #ifdef  TIMING_EXPERIMENT_UDP_HIL_RECVFROM_DURATION_PROCESS
-        clock_gettime(CLOCK_THREAD_CPUTIME_ID, &UDP_HIL_TimeOperation_tsp);
     #endif
     #ifdef TIMING_EXPERIMENT_UDP_HIL_PINGPONG_DURATION_SYSTEM
         if(dt>1000000){
@@ -354,11 +342,11 @@ void UDP_HIL::_timer_tick() {
         }
         if (errno == EAGAIN || errno == EWOULDBLOCK) {
             // Keine Daten empfangen, einfach weiter machen
-            #ifndef UDP_HIL_RESPONSE_TYPE_ALWAYS
-                return;
-            #else
+            #ifdef UDP_HIL_RESPONSE_TYPE_ALWAYS
                 if(tick_calls_since_init < UDP_HIL_RESPONSE_TYPE_ALWAYS_START_AFTER)
                     return;
+            #else
+                return;
             #endif
         } else {
             perror("Fehler beim Empfangen von Daten");
@@ -412,12 +400,6 @@ void UDP_HIL::_timer_tick() {
         #ifdef TIMING_EXPERIMENT_UDP_HIL_SENDTO_DURATION_SYSTEM
             clock_gettime(CLOCK_MONOTONIC_RAW, &UDP_HIL_TimeOperation_ts);
         #endif
-        #ifdef TIMING_EXPERIMENT_UDP_HIL_SENDTO_DURATION_PROCESS
-            clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &UDP_HIL_TimeOperation_ts);
-        #endif
-        #ifdef TIMING_EXPERIMENT_UDP_HIL_SENDTO_DURATION_THREAD
-            clock_gettime(CLOCK_THREAD_CPUTIME_ID, &UDP_HIL_TimeOperation_ts);
-        #endif
 
         ssize_t sent_len = sendto(udp_hil_socket, &buffer, sizeof(buffer), 0,
                                 (struct sockaddr *)&response_addr, addr_len);
@@ -432,12 +414,6 @@ void UDP_HIL::_timer_tick() {
         #if defined(TIMING_EXPERIMENT_UDP_HIL_SENDTO_DURATION_SYSTEM)
             clock_gettime(CLOCK_MONOTONIC_RAW, &UDP_HIL_TimeOperation_tsp);
         #endif
-        #if defined(TIMING_EXPERIMENT_UDP_HIL_SENDTO_DURATION_PROCESS)
-            clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &UDP_HIL_TimeOperation_tsp);
-        #endif
-        #if defined(TIMING_EXPERIMENT_UDP_HIL_SENDTO_DURATION_THREAD)
-            clock_gettime(CLOCK_THREAD_CPUTIME_ID, &UDP_HIL_TimeOperation_tsp);
-        #endif
 
         if (sent_len < 0) {
             perror("Fehler beim Senden der Antwort");
@@ -445,7 +421,7 @@ void UDP_HIL::_timer_tick() {
             packets_send++;
         }
 
-        #if defined(TIMING_EXPERIMENT_UDP_HIL_SENDTO_DURATION_SYSTEM) || defined(TIMING_EXPERIMENT_UDP_HIL_SENDTO_DURATION_PROCESS) || defined(TIMING_EXPERIMENT_UDP_HIL_SENDTO_DURATION_THREAD) || defined(TIMING_EXPERIMENT_UDP_HIL_RECVFROM_DURATION_SYSTEM) || defined(TIMING_EXPERIMENT_UDP_HIL_RECVFROM_DURATION_PROCESS) || defined(TIMING_EXPERIMENT_UDP_HIL_RECVFROM_DURATION_THREAD)
+        #if defined(TIMING_EXPERIMENT_UDP_HIL_SENDTO_DURATION_SYSTEM) || defined(TIMING_EXPERIMENT_UDP_HIL_RECVFROM_DURATION_SYSTEM)
             int64_t UDP_HIL_TimeOperation_difference = (int64_t)(UDP_HIL_TimeOperation_tsp.tv_sec - UDP_HIL_TimeOperation_ts.tv_sec) * (int64_t)1000000000UL + (int64_t)(UDP_HIL_TimeOperation_tsp.tv_nsec - UDP_HIL_TimeOperation_ts.tv_nsec);
             TIMING_EXPERIMENT_UDP_HIL_OUTPUT(UDP_HIL_TimeOperation_difference);
         #endif 

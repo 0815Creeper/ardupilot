@@ -38,7 +38,7 @@ uint64_t jitter_init_us = 0;
 uint64_t jitter_duration_us = SELECTIVE_JITTER_INJETION_MS5611_DURATION;
 #endif
 
-#if defined(TIMING_EXPERIMENT_MS5611_CONVERSION_DURATION_SYSTEM) || defined(TIMING_EXPERIMENT_MS5611_CONVERSION_DURATION_PROCESS) || defined(TIMING_EXPERIMENT_MS5611_CONVERSION_DURATION_THREAD)
+#if defined(TIMING_EXPERIMENT_MS5611_CONVERSION_DURATION_SYSTEM)
 #include <time.h>
 struct timespec MS5611_TimeOperation_ts;
 struct timespec MS5611_TimeOperation_tsp;
@@ -430,13 +430,6 @@ void AP_Baro_MS56XX::_calculate_5611()
     MS5611_CallPrecision_prev_nanos = MS5611_CallPrecision_nanos;
     TIMING_EXPERIMENT_MS5611_OUTPUT(MS5611_CallPrecision_difference);
     #endif
-
-    #ifdef TIMING_EXPERIMENT_MS5611_CONVERSION_DURATION_PROCESS
-    clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &MS5611_TimeOperation_ts);
-    #endif
-    #ifdef TIMING_EXPERIMENT_MS5611_CONVERSION_DURATION_THREAD
-    clock_gettime(CLOCK_THREAD_CPUTIME_ID, &MS5611_TimeOperation_ts);
-    #endif
     #ifdef TIMING_EXPERIMENT_MS5611_CONVERSION_DURATION_SYSTEM
     clock_gettime(CLOCK_MONOTONIC_RAW, &MS5611_TimeOperation_ts);
     #endif
@@ -520,16 +513,10 @@ void AP_Baro_MS56XX::_calculate_5611()
 
     _copy_to_frontend(_instance, pressure, temperature);
 
-    #ifdef TIMING_EXPERIMENT_MS5611_CONVERSION_DURATION_PROCESS
-    clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &MS5611_TimeOperation_tsp);
-    #endif
-    #ifdef TIMING_EXPERIMENT_MS5611_CONVERSION_DURATION_THREAD
-    clock_gettime(CLOCK_THREAD_CPUTIME_ID, &MS5611_TimeOperation_tsp);
-    #endif
     #ifdef TIMING_EXPERIMENT_MS5611_CONVERSION_DURATION_SYSTEM
     clock_gettime(CLOCK_MONOTONIC_RAW, &MS5611_TimeOperation_tsp);
     #endif
-    #if defined(TIMING_EXPERIMENT_MS5611_CONVERSION_DURATION_SYSTEM) || defined(TIMING_EXPERIMENT_MS5611_CONVERSION_DURATION_PROCESS) || defined(TIMING_EXPERIMENT_MS5611_CONVERSION_DURATION_THREAD)
+    #if defined(TIMING_EXPERIMENT_MS5611_CONVERSION_DURATION_SYSTEM)
     int64_t MS5611_TimeOperation_difference = (int64_t)(MS5611_TimeOperation_tsp.tv_sec - MS5611_TimeOperation_ts.tv_sec) * (int64_t)1000000000UL + (int64_t)(MS5611_TimeOperation_tsp.tv_nsec - MS5611_TimeOperation_ts.tv_nsec);
     TIMING_EXPERIMENT_MS5611_OUTPUT(MS5611_TimeOperation_difference);
     #endif

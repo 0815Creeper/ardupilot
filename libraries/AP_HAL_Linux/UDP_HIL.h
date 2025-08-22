@@ -18,36 +18,36 @@
 #define UDP_HIL_RESPONSE_PORT (UDP_HIL_PORT + 1000)
 
 struct GPSStruct {
-    int32_t lat; // in 1E7 degrees
-    int32_t lon; // in 1E7 degrees
-    int32_t alt; // in cm
-    float gspd; // m/s
-    float gcourse; // Heading 2D deg * 100000
-    Vector3f velocity;///< 3D velocity in m/s, in NED format
-    float horizontal_accuracy;
-    float vertical_accuracy;
-    float speed_accuracy;
-    uint16_t vDOP;
-    uint16_t hDOP;
-    uint32_t time_week_ms;              ///< GPS time (milliseconds from start of GPS week)
-    uint16_t time_week;                 ///< GPS week number                      ///< horizontal dilution of precision in cm
-    uint8_t status; //Ardupilot status, not UBX; see AP_GPS for definition
-    uint8_t num_sats;
+	int32_t  lat;                 // Latitude in 1E7 degrees
+	int32_t  lon;                 // Longitude in 1E7 degrees
+	int32_t  alt;                 // Altitude in cm
+	float    gspd;                // Ground speed in m/s
+	float    gcourse;             // Heading 2D in degrees*100000
+	Vector3f velocity;            // 3D velocity in m/s, NED format
+	float    horizontal_accuracy; // Horizontal position accuracy in meters
+	float    vertical_accuracy;   // Vertical position accuracy in meters
+	float    speed_accuracy;      // Speed accuracy in m/s
+	uint16_t vDOP;                // Vertical dilution of precision in cm
+	uint16_t hDOP;                // Horizontal dilution of precision in cm
+	uint32_t time_week_ms;        // GPS time: ms since start of GPS week
+	uint16_t time_week;           // GPS week number
+	uint8_t  status;              // ArduPilot GPS status code (not UBX); \-see AP_GPS for definition
+	uint8_t  num_sats;            // Number of satellites in view
 };
 
 struct DataStruct {
-    uint16_t motorPWM0;
-    uint16_t motorPWM1;
-    uint16_t motorPWM2;
-    uint16_t motorPWM3;
-    float Baro_pressure;
-    float Baro_temprature;
-    uint16_t IMU_buff[MPU_SAMPLE_SIZE*UDP_HIL_IMU_BUFFER_LEN/sizeof(uint16_t)];
-    Vector3f MAG_xyz;
-    uint8_t seq_num;
-    uint8_t udp_hil_config; //msb7 ... lsb0 : bit0=UDP_HIL_RESPONSE_TYPE_ALWAYS; bit1=START_EXPERIMENT
-    uint8_t unused_reserved;
-    GPSStruct GPSstate;
+	uint16_t motorPWM0;           // PWM output for motor 0
+	uint16_t motorPWM1;           // PWM output for motor 1
+	uint16_t motorPWM2;           // PWM output for motor 2
+	uint16_t motorPWM3;           // PWM output for motor 3
+	float    Baro_pressure;       // Barometric pressure in Pascals
+	float    Baro_temperature;    // Barometric temperature in degree Celsius
+	uint16_t IMU_buff[MPU_SAMPLE_SIZE * UDP_HIL_IMU_BUFFER_LEN / sizeof(uint16_t)]; 
+	Vector3f MAG_xyz;             // Magnetometer readings in uT (X, Y, Z)
+	uint8_t  seq_num;             // Packet sequence number
+	uint8_t  udp_hil_config;      // msb7...lsb0: bit1=START_EXPERIMENT (flag for UDP_HIL: set by simulation); bit0=UDP_HIL_RESPONSE_TYPE_ALWAYS (config_info for simulation: set by Ardupilot)
+	uint8_t  unused_reserved;     // Reserved for alignment/future use
+	GPSStruct GPSstate;           // GPS state data
 
     void reset() {
         // Reset individual members to zero 

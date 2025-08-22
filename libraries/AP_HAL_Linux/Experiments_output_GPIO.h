@@ -1,16 +1,11 @@
 #pragma once
-
-
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <unistd.h>
 #include <stdint.h>
 #include <stdio.h>
-
 #define GPIO_BASE_PHYS 0xFE200000
 #define BLOCK_SIZE     (4*1024)
-
-//static volatile uint32_t* gpio_map = nullptr;
 
 #define INIT_GPIO() do { \
     if (!gpio_map) { \
@@ -37,4 +32,3 @@
 #define GPIO_WRITE_26_1() do { \
     gpio_map[7] = (1 << (26)); /* GPSET0 */ \
 } while(0)
- 
