@@ -56,7 +56,7 @@ struct DataStruct {
         motorPWM2 = 0;
         motorPWM3 = 0;
         Baro_pressure = 0.0f;
-        Baro_temprature = 0.0f;
+        Baro_temperature = 0.0f;
         memset(IMU_buff, 0, sizeof(IMU_buff));
         MAG_xyz.x = 0.0f;
         MAG_xyz.y = 0.0f;

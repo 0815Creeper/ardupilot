@@ -33,12 +33,11 @@
 //#define TIMING_EXPERIMENT_MPU9250_UDP_DECENTRALIZED_SEND_TO
 //#define TIMING_EXPERIMENT_MPU9250_UDP_DECENTRALIZED_RECV_FROM
 //#define SELECTIVE_JITTER_INJETION_MS5611_ENABLED // enables selective jitter injection for ms5611 on main thread
-//end of toggle options
-
 #ifdef SELECTIVE_JITTER_INJETION_MS5611_ENABLED
 #define SELECTIVE_JITTER_INJETION_MS5611_DURATION 20000  // in microseconds per loop
 #define SELECTIVE_JITTER_INJETION_MS5611_GX_THRESHOLD 10
 #endif
+//end of toggle options
 
 // Experiments
 // only one per class at a time (except ublox) !!!
@@ -57,7 +56,6 @@
 //#define TIMING_EXPERIMENT_PWM_SET_DUTY_CYCLE_CALL_PRECISION
 //end of Experiments
 
-
 // Experiment output
 // only one of same name at a time !!!
 //#define TIMING_EXPERIMENT_UDP_HIL_GPIO_OUTPUT_26_ENABLED
@@ -65,12 +63,12 @@
 //#define TIMING_EXPERIMENT_UDP_HIL_OUTPUT(x) do{FILE*file=fopen("/home/pi/experiment_udp_hil_output.txt","a");if(file){fprintf(file,"%lli\n",x);fclose(file);}}while(0)
 //#define TIMING_EXPERIMENT_UDP_HIL_OUTPUT(x) do{FILE*file=fopen("/run/testfiles/experiment_udp_hil_output.txt","a");if(file){fprintf(file,"%lli\n",x);fclose(file);}}while(0)
 #define TIMING_SENDTO_DONE_PRECISION_UDP_HIL_OUTPUT(x) printf("UDP_HIL_TIMING_SENDTO_DONE_PRECISION_OUTPUT: %lli\n", x)
-#define TIMING_EXPERIMENT_MS5611_OUTPUT(x) printf("MS5611_TIMING_EXPERIMENT_OUTPUT: %lli\n", x)
+//#define TIMING_EXPERIMENT_MS5611_OUTPUT(x) printf("MS5611_TIMING_EXPERIMENT_OUTPUT: %lli\n", x)
 //#define TIMING_EXPERIMENT_MS5611_OUTPUT(x) do{FILE*file=fopen("/home/pi/experiment_MS5611_output.txt","a");if(file){fprintf(file,"%lli\n",x);fclose(file);}}while(0)
-//#define TIMING_EXPERIMENT_MS5611_OUTPUT(x) do{FILE*file=fopen("/run/testfiles/experiment_MS5611_output.txt","a");if(file){fprintf(file,"%lli\n",x);fclose(file);}}while(0)
-#define TIMING_EXPERIMENT_MPU9250_OUTPUT(x) printf("MPU9250_TIMING_EXPERIMENT_OUTPUT: %lli\n", x)
+#define TIMING_EXPERIMENT_MS5611_OUTPUT(x) do{FILE*file=fopen("/run/testfiles/experiment_MS5611_output.txt","a");if(file){fprintf(file,"%lli\n",x);fclose(file);}}while(0)
+//#define TIMING_EXPERIMENT_MPU9250_OUTPUT(x) printf("MPU9250_TIMING_EXPERIMENT_OUTPUT: %lli\n", x)
 //#define TIMING_EXPERIMENT_MPU9250_OUTPUT(x) do{FILE*file=fopen("/home/pi/experiment_MPU9250_output.txt","a");if(file){fprintf(file,"%lli\n",x);fclose(file);}}while(0)
-//#define TIMING_EXPERIMENT_MPU9250_OUTPUT(x) do{FILE*file=fopen("/run/testfiles/experiment_MPU9250_output.txt","a");if(file){fprintf(file,"%lli\n",x);fclose(file);}}while(0)
+#define TIMING_EXPERIMENT_MPU9250_OUTPUT(x) do{FILE*file=fopen("/run/testfiles/experiment_MPU9250_output.txt","a");if(file){fprintf(file,"%lli\n",x);fclose(file);}}while(0)
 #define TIMING_EXPERIMENT_AK8963_OUTPUT(x) printf("AK8963_TIMING_EXPERIMENT_OUTPUT: %lli\n", x)
 //#define TIMING_EXPERIMENT_AK8963_OUTPUT(x) do{FILE*file=fopen("/home/pi/experiment_AK8963_output.txt","a");if(file){fprintf(file,"%lli\n",x);fclose(file);}}while(0)
 //#define TIMING_EXPERIMENT_AK8963_OUTPUT(x) do{FILE*file=fopen("/run/testfiles/experiment_AK8963_output.txt","a");if(file){fprintf(file,"%lli\n",x);fclose(file);}}while(0)

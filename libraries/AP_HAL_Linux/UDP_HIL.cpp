@@ -117,12 +117,12 @@ uint8_t UDP_HIL::getInSeq(){
 void UDP_HIL::getInBaro(float* p, float* t) {
     std::lock_guard<std::mutex> lock(in_mutex_);
     *p = in_data_.Baro_pressure;
-    *t = in_data_.Baro_temprature;
+    *t = in_data_.Baro_temperature;
 }
 void UDP_HIL::getOutBaro(float* p, float* t) {
     std::lock_guard<std::mutex> lock(out_mutex_);
     *p = out_data_.Baro_pressure;
-    *t = out_data_.Baro_temprature;
+    *t = out_data_.Baro_temperature;
 }
 
 void UDP_HIL::getInIMUbuff(uint8_t* buff, uint8_t offset8) {
@@ -166,7 +166,7 @@ GPSStruct UDP_HIL::getInGPSstate() {
 void UDP_HIL::setOutBaro(float p, float t) {
     std::lock_guard<std::mutex> lock(out_mutex_);
     out_data_.Baro_pressure = p;
-    out_data_.Baro_temprature = t;
+    out_data_.Baro_temperature = t;
 }
 
 void UDP_HIL::setOutIMUbuff(uint8_t* buff, uint8_t offset8, uint8_t n_samples) {
